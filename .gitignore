@@ -1,0 +1,19 @@
+
+# Логи
+*.log
+
+# Настройки IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Maven
+target/
+dependency-reduced-pom.xml
+
+# Gradle
+.gradle
+build/
+
+
