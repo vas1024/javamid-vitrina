@@ -1,9 +1,7 @@
 package javamid.vitrina;
 
 import jakarta.transaction.Transactional;
-import javamid.vitrina.model.Basket;
-import javamid.vitrina.model.BasketItem;
-import javamid.vitrina.model.Product;
+import javamid.vitrina.model.*;
 import javamid.vitrina.repositories.BasketRepository;
 import javamid.vitrina.repositories.ProductRepository;
 import javamid.vitrina.services.ProductService;
@@ -38,7 +36,7 @@ public class ProductServiceTest {
 
   @Test
   @Transactional
-  public void saveProductToBasket(){
+  public void saveProductToBasketTest(){
     Product product = productRepository.getById(1l);
     Basket basket = basketRepository.getById( 1L );
     productService.addProductToBasket(product,basket);
@@ -47,5 +45,32 @@ public class ProductServiceTest {
     for( BasketItem e : basketItemList ){
       System.out.println( e.getProduct().getName() );
     }
+  }
+
+  @Test
+  @Transactional
+  public void makeOrderTest(){
+    Product product = productRepository.getById(1l);
+    Basket basket = basketRepository.getById( 1L );
+    productService.addProductToBasket(product,basket);
+
+    List<BasketItem> basketItemList = basket.getBasketItems();
+    System.out.println( "Basket:");
+    for( BasketItem e : basketItemList ){
+      System.out.println( e.getProduct().getName() );
+    }
+
+    User user = basket.getUser();
+    productService.makeOrder(basket);
+
+    List<Order> orderList = user.getOrders();
+    for( Order o : orderList){
+      for( OrderItem oi: o.getOrderItems() ){
+        System.out.println( "Product name: " + oi.getName() + "  price: " +  oi.getPrice() );
+      }
+    }
+
+
+
   }
 }
