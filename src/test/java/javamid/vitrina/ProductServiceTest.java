@@ -1,7 +1,7 @@
 package javamid.vitrina;
 
 import jakarta.transaction.Transactional;
-import javamid.vitrina.model.*;
+import javamid.vitrina.dao.*;
 import javamid.vitrina.repositories.BasketRepository;
 import javamid.vitrina.repositories.ProductRepository;
 import javamid.vitrina.services.ProductService;
@@ -28,7 +28,7 @@ public class ProductServiceTest {
 
   @Test
   @Transactional
-  public void getProductTest() {
+  public void getPr♠oductTest() {
     Pageable pageable = PageRequest.of(0, 5);
     Page<Product> foundProductPage = productService.getProducts("", 0, 10);
     printPage(foundProductPage);

@@ -1,7 +1,7 @@
 package javamid.vitrina;
 
 import jakarta.transaction.Transactional;
-import javamid.vitrina.model.Product;
+import javamid.vitrina.dao.Product;
 import javamid.vitrina.repositories.BasketRepository;
 import javamid.vitrina.repositories.ProductRepository;
 import static javamid.vitrina.testUtils.printPage;

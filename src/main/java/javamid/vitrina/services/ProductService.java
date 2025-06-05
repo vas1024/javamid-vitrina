@@ -1,10 +1,9 @@
 package javamid.vitrina.services;
 
-import javamid.vitrina.repositories.BasketItemRepository;
 import javamid.vitrina.repositories.BasketRepository;
 import javamid.vitrina.repositories.OrderRepository;
 import javamid.vitrina.repositories.ProductRepository;
-import javamid.vitrina.model.*;
+import javamid.vitrina.dao.*;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;

@@ -2,7 +2,7 @@ package javamid.vitrina.services;
 
 
 import jakarta.transaction.Transactional;
-import javamid.vitrina.model.*;
+import javamid.vitrina.dao.*;
 import javamid.vitrina.repositories.BasketRepository;
 import javamid.vitrina.repositories.UserRepository;
 import org.springframework.stereotype.Service;

@@ -1,4 +1,4 @@
-package javamid.vitrina.model;
+package javamid.vitrina.dao;
 
 import jakarta.persistence.*;
 

@@ -1,11 +1,10 @@
 package javamid.vitrina.repositories;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.repository.CrudRepository;
 import org.springframework.lang.NonNull;
 
 import java.util.List;
-import javamid.vitrina.model.*;
+import javamid.vitrina.dao.*;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
