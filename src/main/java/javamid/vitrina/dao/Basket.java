@@ -17,7 +17,7 @@ public class Basket {
   @JoinColumn(name = "user_id")  // Столбец с внешним ключом в таблице baskets
   private User user;
 
-  @OneToMany(mappedBy = "basket", cascade = CascadeType.ALL, orphanRemoval = true)
+  @OneToMany(mappedBy = "basket", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY )
   private List<BasketItem> basketItems = new ArrayList<>();
 
 

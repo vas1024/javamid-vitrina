@@ -30,4 +30,5 @@ public class Item {
     if ( product.getImage() != null ) this.imgPath = product.getId().toString();
   }
 
+  public void setCount( int count ){ this.count = count; }
 }

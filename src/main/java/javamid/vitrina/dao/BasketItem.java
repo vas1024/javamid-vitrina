@@ -9,7 +9,7 @@ public class BasketItem {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @ManyToOne
+  @ManyToOne( fetch = FetchType.LAZY)
   @JoinColumn(name = "basket_id")
   private Basket basket;
 
@@ -23,7 +23,7 @@ public class BasketItem {
   public void setBasket(Basket basket){this.basket = basket;}
   public void setProduct(Product product){this.product = product;}
   public void setQuantity(int quantity){this.quantity = quantity;}
-  public Long getid(){return id;}
+  public Long getId(){return id;}
   public Basket getBasket(){return basket;}
   public Product getProduct(){return product;}
   public int getQuantity(){return  quantity;}

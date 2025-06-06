@@ -28,7 +28,7 @@ public class ProductServiceTest {
 
   @Test
   @Transactional
-  public void getPr♠oductTest() {
+  public void getProductTest() {
     Pageable pageable = PageRequest.of(0, 5);
     Page<Product> foundProductPage = productService.getProducts("", 0, 10);
     printPage(foundProductPage);
