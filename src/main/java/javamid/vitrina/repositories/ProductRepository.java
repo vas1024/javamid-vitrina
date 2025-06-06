@@ -20,4 +20,6 @@ public interface ProductRepository extends JpaRepository<Product,Long> {
     """)
   public  Page<Product> findByKeyword(String keyword, Pageable pageable);
 
+  @Query("SELECT p.image FROM Product p WHERE p.id = :id")
+  byte[] findImageById(Long id);
 }

@@ -12,12 +12,14 @@ public class Item {
   private BigDecimal price;
   private String description;
   private int count;
+  private String imgPath = "0";
 
   public Long getId() { return id; }
   public String getTitle(){ return title; }
   public BigDecimal getPrice() { return price; }
   public String getDescription() { return description; }
   public int getCount(){ return count; }
+  public String getImgPath(){ return imgPath; }
 
   public Item( Product product ){
     this.id = product.getId();
@@ -25,6 +27,7 @@ public class Item {
     this.price = new BigDecimal( product.getPrice().toString() );
     this.description = product.getDescription();
     this.count = 0;
+    if ( product.getImage() != null ) this.imgPath = product.getId().toString();
   }
 
 }

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Простая загрузка файла</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .message { margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 4px; }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+<h1>Загрузка файла</h1>
+
+<div class="message" th:text="${message}">Сообщение будет здесь</div>
+
+<form method="post" action="/admin/upload/parse" enctype="multipart/form-data">
+    <input type="file" name="file"  accept=".zip,application/zip">
+    <button type="submit">Распарсить</button>
+</form>
+
+<form method="post" action="/admin/upload/upload">
+    <input type="hidden" name="fileName" th:value="${fileName}">
+    <button type="submit"
+            th:disabled="${!enableUpload}"
+            th:text="'Загрузить в БД' + (${enableUpload} ? '' : ' (неактивно)')">
+    </button>
+</form>
+</body>
+</html>

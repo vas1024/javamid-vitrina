@@ -4,12 +4,21 @@ import javamid.vitrina.model.Item;
 import javamid.vitrina.model.Paging;
 import javamid.vitrina.dao.Product;
 import javamid.vitrina.services.ProductService;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -62,6 +71,31 @@ public class ProductController {
     model.addAttribute("paging", paging );
 
     return "main.html";
+  }
+
+  @GetMapping("/images/{id}")
+  public ResponseEntity<byte[]> getImage(@PathVariable( name = "id" ) Long id) throws IOException {
+    byte[]  imageData = productService.getImageByProductId(id); // image хранится как byte[]
+    return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_TYPE, "image/jpeg")  // Жёстко задаём тип
+            .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(imageData.length))
+            .header(HttpHeaders.CACHE_CONTROL, "no-transform") // Запрещаем преобразования
+            .body(imageData);
+  }
+
+
+  @GetMapping("/items/{id}")
+  public String getItem(@PathVariable(name="id") long id,
+                        Model model ){
+    Product product = productService.getProductById(id);
+    Item item = new Item(product);
+    model.addAttribute("item", item);
+    System.out.println("hello from item!");
+    System.out.println("chosen product: " + product.getName());
+    System.out.println("converted to item: " + item.getId());
+    System.out.println("product.getImage is: " + product.getImage());
+    System.out.println("item.getImage is:" +item.getImgPath());
+    return "item.html";
   }
 
 }

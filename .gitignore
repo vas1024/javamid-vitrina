@@ -16,4 +16,7 @@ dependency-reduced-pom.xml
 .gradle
 build/
 
+# Upload dir is created while application works
+uploads/
+
 
