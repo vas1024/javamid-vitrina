@@ -30,7 +30,7 @@ public class ProductServiceTest {
   @Transactional
   public void getProductTest() {
     Pageable pageable = PageRequest.of(0, 5);
-    Page<Product> foundProductPage = productService.getProducts("", 0, 10);
+    Page<Product> foundProductPage = productService.getProducts("", "NO",0, 10);
     printPage(foundProductPage);
   }
 

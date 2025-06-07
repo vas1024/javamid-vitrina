@@ -49,25 +49,22 @@ public class ProductController {
   public void refreshBasket(){
     this.basket = productService.getBasketById(1L);
     List<BasketItem> basketItems = basket.getBasketItems();
+    Map<Long,Integer> productsInThisBasketRefreshed = new HashMap<>();
     BigDecimal sum = BigDecimal.valueOf(0);
     for ( BasketItem basketItem : basketItems ){
       Product product = basketItem.getProduct();
       int quantity = basketItem.getQuantity();
-      productsInThisBasket.put(product.getId(),quantity);
+      productsInThisBasketRefreshed.put(product.getId(),quantity);
 
-      Product productFromDb = productService.getProductById(product.getId());
-//      System.out.println("!!!ProductFromDb: " + productFromDb );
-      System.out.println("!!!ProductFromDb id: " + productFromDb.getId() );
-      System.out.println("!!!ProductfromDb name: " + productFromDb.getName() );
-
-      //String description = productFromDb.getDescription();
-      /*
-      BigDecimal price = productFromDb.getPrice();
+      BigDecimal price = product.getPrice();
       sum = sum.add( price.multiply(BigDecimal.valueOf(quantity)) );
-
-       */
     }
+    this.productsInThisBasket = productsInThisBasketRefreshed;
     this.inTotal = sum;
+
+    System.out.println("after refresh basket");
+    System.out.println("productsInThisBasket: " + productsInThisBasket );
+    System.out.println("inTotal: " + inTotal );
   }
 
 
@@ -77,21 +74,14 @@ public class ProductController {
 
   @GetMapping("/main/items")
   public String getItems(
-          @RequestParam(name = "search", required = false, defaultValue = "" ) String search,
+          @RequestParam(name = "search", required = false, defaultValue = "" ) String keyword,
+          @RequestParam(name = "sort",  defaultValue = "NO" ) String sort,
           @RequestParam(name = "pageSize", defaultValue = "10") int size,
           @RequestParam(name = "pageNumber", defaultValue = "1") int page,
           Model model
           ) {
 
-    Page<Product> productPage = productService.getProducts("",0,10 );
-
-    System.out.println("keyword is: " + search );
-    System.out.println("found this products:");
-    for( Product product : productPage.getContent()){
-      System.out.println("id " + product.getId() );
-      System.out.println("name " + product.getName() );
-      System.out.println("description " + product.getDescription() );
-    }
+    Page<Product> productPage = productService.getProducts( keyword, sort,page - 1, size );
 
     List<Item> itemList = new ArrayList<>();
     for( Product product : productPage.getContent() ){
@@ -103,14 +93,16 @@ public class ProductController {
 
     model.addAttribute("items", itemList);
 
+
     Paging paging = new Paging();
-    paging.setPageNumber(1);
-    paging.setPageSize(10);
-    paging.setNext(false);
-    paging.setPrevious(false);
+    paging.setPageNumber( productPage.getNumber() + 1 );
+    paging.setPageSize( productPage.getSize() );
+    paging.setNext( productPage.hasNext() );
+    paging.setPrevious( productPage.hasPrevious() );
 
     model.addAttribute("paging", paging );
-
+    model.addAttribute("search", keyword );
+    model.addAttribute("sort",   sort );
     return "main.html";
   }
 
@@ -133,26 +125,44 @@ public class ProductController {
     int count = productsInThisBasket.getOrDefault(id,0);
     item.setCount(count);
     model.addAttribute("item", item);
-    System.out.println("hello from item!");
-    System.out.println("chosen product: " + product.getName());
-    System.out.println("converted to item: " + item.getId());
-    System.out.println("product.getImage is: " + product.getImage());
-    System.out.println("item.getImage is:" +item.getImgPath());
     return "item.html";
   }
 
-  @PostMapping("/items/{id}")
-  public String addRemoveDeleteProductInBasket( @PathVariable(name="id") long id,
-                                @RequestParam String action,
-                                Model model ) {
+
+
+  public void plusMinusDelete( Long id, String action ){
     Long basketId = basket.getId();
     if( action.equals("plus") )   productService.addProductToBasket(id,basketId );
     if( action.equals("minus") )  productService.removeProductFromBasket(id,basketId );
     if( action.equals("delete") ) productService.dropProductFromBasket(id,basketId );
     refreshBasket();
+  }
 
+  @PostMapping("/items/{id}")
+  public String addRemoveDeleteProductInProductItem( @PathVariable(name="id") long id,
+                                @RequestParam String action,
+                                Model model ) {
+    plusMinusDelete( id, action );
     return "redirect:/items/{id}";
   }
+
+  @PostMapping("/cart/items/{id}")
+  public String addRemoveDeleteProductInBasket( @PathVariable(name="id") long id,
+                                                @RequestParam String action,
+                                                Model model ) {
+    plusMinusDelete( id, action );
+    return "redirect:/cart/items";
+  }
+
+  @PostMapping("/main/items/{id}")
+  public String addRemoveDeleteProductInMain( @PathVariable(name="id") long id,
+                                              @RequestParam String action,
+                                              Model model ) {
+    plusMinusDelete( id, action );
+    return "redirect:/main/items";
+  }
+
+
 
   @GetMapping("/cart/items")
   public String getBasket( Model model ){

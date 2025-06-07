@@ -46,17 +46,23 @@ public class ProductService {
   }
 
 
-  public Page<Product> getProducts(String keyword, int page, int size) {
-    PageRequest pageable = PageRequest.of(page, size, Sort.by("name"));  // Страница 0-based
+  public Page<Product> getProducts(String keyword, String sort, int page, int size) {
+    String sortBy = "id";
+    if( sort.equals("NO") )    sortBy = "id";
+    if( sort.equals("ALPHA") ) sortBy = "name";
+    if( sort.equals("PRICE") ) sortBy = "price";
+    System.out.println("___Sort by " + sortBy);
+    PageRequest pageable = PageRequest.of(page, size, Sort.by(sortBy ));  // Страница 0-based
     return productRepository.findByKeyword(keyword, pageable);
   }
 
   public Product getProductById( Long id ) {
-    return productRepository.getById(id);
+    Product product = productRepository.findById(id).get();
+    return product;
   }
 
   public void addProductToBasket( Long productId, Long basketId ) {
-    Basket basket = basketRepository.getById( basketId );
+    Basket basket = basketRepository.findById( basketId ).get();
     List<BasketItem> basketItemList = basket.getBasketItems();
     boolean alreadyInBasket = false;
     for( BasketItem basketItem: basketItemList ){
@@ -72,16 +78,17 @@ public class ProductService {
 
     if( ! alreadyInBasket ) {
       BasketItem basketItem = new BasketItem();
-      Product product = productRepository.getById(productId);
+      Product product = productRepository.findById(productId).get();
       basketItem.setBasket(basket);
       basketItem.setProduct(product);
+      basketItem.setQuantity(1);
       basketItemList.add(basketItem);
       basketRepository.save(basket);
     }
   }
 
   public void removeProductFromBasket( Long productId, Long basketId ) {
-    Basket basket = basketRepository.getById( basketId );
+    Basket basket = basketRepository.findById( basketId ).get();
     List<BasketItem> basketItemList = basket.getBasketItems();
     Iterator<BasketItem> iterator = basketItemList.iterator();
       while (iterator.hasNext()) {
@@ -101,16 +108,16 @@ public class ProductService {
   }
 
   public void dropProductFromBasket( Long productId, Long basketId ) {
-    Basket basket = basketRepository.getById( basketId );
+    Basket basket = basketRepository.findById( basketId ).get();
     List<BasketItem> basketItemList = basket.getBasketItems();
     Iterator<BasketItem> iterator = basketItemList.iterator();
     while (iterator.hasNext()) {
       BasketItem basketItem = iterator.next();
       if (basketItem.getProduct().getId() == productId) {
         iterator.remove();
-        basketRepository.save( basket );
       }
     }
+    basketRepository.save( basket );
   }
 
 
@@ -141,18 +148,12 @@ public class ProductService {
     productRepository.saveAll( products );
   }
 
-  @Transactional
   public Basket getBasketById( Long id ){
-    Basket basket = basketRepository.getById( id );
-//    basket.getBasketItems().size();  // похоже, без этого не подтягивается eager fetch
-    for( BasketItem basketItem : basket.getBasketItems() ){
-      Product product = basketItem.getProduct();
-    }
+    Basket basket = basketRepository.findById( id ).get();
     return basket;
   }
-
   public List<BasketItem> getBasketItemsByBasketId( Long basketId ){
-    Basket basket = basketRepository.getById( basketId );
+    Basket basket = basketRepository.findById( basketId ).get();
     return basket.getBasketItems();
   }
 
