@@ -1,5 +1,6 @@
 package javamid.vitrina.model;
 
+import javamid.vitrina.dao.OrderItem;
 import javamid.vitrina.dao.Product;
 
 import java.math.BigDecimal;
@@ -30,5 +31,15 @@ public class Item {
     if ( product.getImage() != null ) this.imgPath = product.getId().toString();
   }
 
+  public Item( OrderItem orderItem ){
+    this.id = orderItem.getId();
+    this.title = orderItem.getName();
+    this.price = new BigDecimal( orderItem.getPrice().toString() );
+    this.description = "";
+    this.count = orderItem.getQuantity();
+    if ( orderItem.getImage() != null ) this.imgPath = orderItem.getId().toString();
+  }
   public void setCount( int count ){ this.count = count; }
+  public void setId( Long id ) { this.id = id; }
+
 }

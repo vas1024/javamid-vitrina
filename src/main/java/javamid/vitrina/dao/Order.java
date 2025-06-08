@@ -14,10 +14,10 @@ public class Order {
   private Long id;
 
   @ManyToOne
-  @JoinColumn(name = "user_id") // ← Здесь уже указывается имя колонки в БД
+  @JoinColumn(name = "user_id") // ← Здесь указывается имя колонки в БД
   private User user; // ← Это то самое поле, на которое ссылается mappedBy
 
-  @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+  @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER )
   private List<OrderItem> orderItems = new ArrayList<>();
 
   public void setId(Long id){this.id = id;}

@@ -14,10 +14,14 @@ public class OrderItem {
   private String name;
   private byte[] image;
   private BigDecimal price;
+  private int quantity;
+  private Long productId;
 
-  @ManyToOne
+  @ManyToOne ( fetch = FetchType.EAGER )
   @JoinColumn(name = "order_id") // ← Здесь уже указывается имя колонки в БД
   private Order order; // ← Это то самое поле, на которое ссылается mappedBy
+
+
 
 
   public void setId(Long id){this.id = id;}
@@ -25,9 +29,14 @@ public class OrderItem {
   public void setImage(byte[] image){this.image = image;}
   public void setPrice(BigDecimal price){this.price = price;}
   public void setOrder(Order order){this.order = order;}
-  public Long getid(){return id;}
+  public void setQuantity(int quantity) {this.quantity = quantity;}
+  public void setProductId(Long productId ){ this.productId = productId; }
+  public Long getId(){return id;}
   public String getName(){return name;}
   public byte[] getImage() {return image;}
   public BigDecimal getPrice() {return price;}
   public Order getOrder() {return order;}
+  public int getQuantity() { return quantity;}
+  public Long getProductId() {return productId; }
 }
+

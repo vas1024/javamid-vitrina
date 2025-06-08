@@ -4,8 +4,10 @@ import jakarta.transaction.Transactional;
 import javamid.vitrina.repositories.BasketItemRepository;
 import javamid.vitrina.repositories.BasketRepository;
 import javamid.vitrina.repositories.OrderRepository;
+import javamid.vitrina.repositories.OrderItemRepository;
 import javamid.vitrina.repositories.ProductRepository;
 import javamid.vitrina.dao.*;
+import org.hibernate.Hibernate;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -24,18 +26,22 @@ public class ProductService {
   private final ProductRepository productRepository;
   private final BasketRepository basketRepository;
   private final OrderRepository orderRepository;
+  private final OrderItemRepository orderItemRepository;
   private final BasketItemRepository basketItemRepository;
+
 
   private byte[] cachedImage;
 
   ProductService( ProductRepository productRepository,
                   BasketRepository basketRepository,
                   BasketItemRepository basketItemRepository,
-                  OrderRepository orderRepository) {
+                  OrderRepository orderRepository,
+                  OrderItemRepository orderItemRepository) {
     this.productRepository = productRepository;
     this.basketRepository = basketRepository;
     this.basketItemRepository = basketItemRepository;
     this.orderRepository = orderRepository;
+    this.orderItemRepository = orderItemRepository;
   }
 
   @PostConstruct
@@ -122,6 +128,9 @@ public class ProductService {
 
 
   public void makeOrder(Basket basket) {
+
+    System.out.println("Hello from productService.makeOrder !!!");
+
     User user = basket.getUser();
     Order order = new Order();
     order.setUser(user);
@@ -130,18 +139,27 @@ public class ProductService {
     List<BasketItem> basketItemList = basket.getBasketItems();
     for( BasketItem basketItem : basketItemList ) {
       OrderItem orderItem = new OrderItem();
+      orderItem.setOrder( order );
       orderItem.setName(basketItem.getProduct().getName());
       orderItem.setImage(basketItem.getProduct().getImage());
       orderItem.setPrice(basketItem.getProduct().getPrice());
+      orderItem.setQuantity(basketItem.getQuantity());
+      orderItem.setProductId(basketItem.getProduct().getId());
       orderItemList.add(orderItem);
     }
     orderRepository.save(order);
     basketRepository.deleteById(basket.getId());
   }
 
+
   public byte[] getImageByProductId( Long id ){
     if( id == 0L ) return cachedImage;
     return productRepository.findImageById( id );
+  }
+
+  public byte[] getImageByOrderItemId( Long id ){
+    if( id == 0L ) return cachedImage;
+    return orderItemRepository.findImageById( id );
   }
 
   public void saveAll( List<Product> products ){
@@ -157,5 +175,15 @@ public class ProductService {
     return basket.getBasketItems();
   }
 
+  public List<Order> findAllOrders( Long basketId ){
+    List<Order> orders = orderRepository.findAll();
+    orders.forEach(order-> Hibernate.initialize(order.getOrderItems()));
+    return orders;
+  }
+
+  public Order findOrderById( Long orderId ){
+    Order order = orderRepository.findById( orderId ).get();
+    return order;
+  }
 
 }

@@ -6,6 +6,8 @@ import javamid.vitrina.dao.BasketItem;
 import javamid.vitrina.model.Item;
 import javamid.vitrina.model.Paging;
 import javamid.vitrina.dao.Product;
+import javamid.vitrina.dao.Order;
+import javamid.vitrina.dao.OrderItem;
 import javamid.vitrina.services.ProductService;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
@@ -117,6 +119,17 @@ public class ProductController {
   }
 
 
+  @GetMapping("/orderimages/{id}")
+  public ResponseEntity<byte[]> getOrderImage(@PathVariable( name = "id" ) Long id) throws IOException {
+    byte[]  imageData = productService.getImageByOrderItemId(id); // image хранится как byte[]
+    return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_TYPE, "image/jpeg")  // Жёстко задаём тип
+            .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(imageData.length))
+            .header(HttpHeaders.CACHE_CONTROL, "no-transform") // Запрещаем преобразования
+            .body(imageData);
+  }
+
+
   @GetMapping("/items/{id}")
   public String getItem(@PathVariable(name="id") long id,
                         Model model ){
@@ -179,6 +192,72 @@ public class ProductController {
     model.addAttribute("empty", empty );
     model.addAttribute("total", inTotal );
     return "cart.html";
+  }
+
+
+  @GetMapping("/orders")
+  public String getOrders( Model model ){
+    Long basketId = basket.getId();
+    List<Order> orderList = productService.findAllOrders( basketId );
+
+    List<Item> itemList = new ArrayList<>();
+    record OrderModel( Long id, BigDecimal totalSum, List<Item> items ) {}
+    List<OrderModel> orderModelList = new ArrayList<>();
+    for( Order order : orderList ){
+      List<OrderItem> orderItemList = order.getOrderItems();
+      System.out.println("!!!!! " + orderItemList );
+      BigDecimal inTotal = BigDecimal.valueOf(0);
+      for( OrderItem orderItem : orderItemList ){
+        Item item = new Item(orderItem);
+        itemList.add( item );
+        inTotal = inTotal.add(orderItem.getPrice().multiply(BigDecimal.valueOf(orderItem.getQuantity())));
+      }
+      OrderModel orderModel = new OrderModel( order.getId(), inTotal, itemList );
+      orderModelList.add( orderModel );
+    }
+    model.addAttribute("orders", orderModelList );
+
+    for( OrderModel orderModel : orderModelList ){
+      System.out.println( orderModel.id() );
+      for( Item item : orderModel.items() ){
+        System.out.println( "- " + item.getId() + " " + item.getTitle() );
+      }
+    }
+
+    return "orders.html";
+  }
+
+
+
+  @GetMapping("/orders/{id}")
+  public String getOrder( @PathVariable(name="id") long orderId,
+                          @RequestParam(name = "newOrder", required = false, defaultValue = "false" ) Boolean newOrder,
+                          Model model ) {
+
+//    Long basketId = basket.getId();
+    Order order = productService.findOrderById( orderId );
+
+    BigDecimal inTotal = BigDecimal.valueOf(0);
+    List<Item> itemList = new ArrayList<>();
+    for( OrderItem orderItem : order.getOrderItems() ) {
+      Item item = new Item(orderItem);
+      item.setId(orderItem.getProductId());  // это костыль, чтобы при клике на картинку шел переход по ссылке на товар
+      itemList.add( item );
+      inTotal = inTotal.add(orderItem.getPrice().multiply(BigDecimal.valueOf(orderItem.getQuantity())));
+    }
+
+    record OrderModel( Long id, BigDecimal totalSum, List<Item> items ) {}
+    OrderModel orderModel = new OrderModel( orderId, inTotal, itemList );
+    model.addAttribute("order", orderModel );
+    return "order.html";
+  }
+
+
+
+  @PostMapping
+  public String postBuy(){
+
+    return "redirect:/orders/{id}?newOrder=true";
   }
 
 }
