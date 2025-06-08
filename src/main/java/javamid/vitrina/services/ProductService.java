@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class ProductService {
@@ -126,10 +127,8 @@ public class ProductService {
     basketRepository.save( basket );
   }
 
-
-  public void makeOrder(Basket basket) {
-
-    System.out.println("Hello from productService.makeOrder !!!");
+  @Transactional // чтобы сделался коммит при удалении корзины
+  public Long makeOrder(Basket basket) {
 
     User user = basket.getUser();
     Order order = new Order();
@@ -148,7 +147,9 @@ public class ProductService {
       orderItemList.add(orderItem);
     }
     orderRepository.save(order);
-    basketRepository.deleteById(basket.getId());
+    basket.setBasketItems(new ArrayList<BasketItem>() );
+    basketRepository.save(basket);
+    return order.getId();
   }
 
 
@@ -167,9 +168,11 @@ public class ProductService {
   }
 
   public Basket getBasketById( Long id ){
-    Basket basket = basketRepository.findById( id ).get();
-    return basket;
+    Optional<Basket> basketOptional= basketRepository.findById( id );
+    if( basketOptional.isEmpty() ) return null;
+    else return basketOptional.get();
   }
+
   public List<BasketItem> getBasketItemsByBasketId( Long basketId ){
     Basket basket = basketRepository.findById( basketId ).get();
     return basket.getBasketItems();

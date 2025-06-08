@@ -9,6 +9,7 @@ import javamid.vitrina.dao.Product;
 import javamid.vitrina.dao.Order;
 import javamid.vitrina.dao.OrderItem;
 import javamid.vitrina.services.ProductService;
+import javamid.vitrina.services.UserService;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -35,8 +37,11 @@ import java.util.Map;
 public class ProductController {
 
   private final ProductService productService;
-  public ProductController(ProductService productService) {
+  private final UserService userService;
+  public ProductController(ProductService productService,
+                           UserService userService) {
     this.productService = productService;
+    this.userService = userService;
   }
 
   private  Basket basket;
@@ -45,6 +50,8 @@ public class ProductController {
 
   @PostConstruct
   public void initBasket(){
+    System.out.println("first basket = "+ productService.getBasketById(1l));
+    if( productService.getBasketById(1L) == null ) userService.createUserWithBasket("Иван Иванович");
     refreshBasket();;
   }
 
@@ -200,13 +207,13 @@ public class ProductController {
     Long basketId = basket.getId();
     List<Order> orderList = productService.findAllOrders( basketId );
 
-    List<Item> itemList = new ArrayList<>();
     record OrderModel( Long id, BigDecimal totalSum, List<Item> items ) {}
     List<OrderModel> orderModelList = new ArrayList<>();
     for( Order order : orderList ){
       List<OrderItem> orderItemList = order.getOrderItems();
       System.out.println("!!!!! " + orderItemList );
       BigDecimal inTotal = BigDecimal.valueOf(0);
+      List<Item> itemList = new ArrayList<>();
       for( OrderItem orderItem : orderItemList ){
         Item item = new Item(orderItem);
         itemList.add( item );
@@ -254,10 +261,14 @@ public class ProductController {
 
 
 
-  @PostMapping
-  public String postBuy(){
+  @PostMapping("/buy")
+  public String postBuy( RedirectAttributes redirectAttributes ){
 
-    return "redirect:/orders/{id}?newOrder=true";
+    Long id = productService.makeOrder( basket );
+    System.out.println("Buy id : " + id);
+    redirectAttributes.addAttribute("id", id); // для URL
+    redirectAttributes.addFlashAttribute("newOrder", true); // для модели
+    return "redirect:/orders/{id}";
   }
 
 }
