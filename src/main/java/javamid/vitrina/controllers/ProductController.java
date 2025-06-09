@@ -50,7 +50,6 @@ public class ProductController {
 
   @PostConstruct
   public void initBasket(){
-    System.out.println("first basket = "+ productService.getBasketById(1l));
     if( productService.getBasketById(1L) == null ) userService.createUserWithBasket("Иван Иванович");
     refreshBasket();;
   }

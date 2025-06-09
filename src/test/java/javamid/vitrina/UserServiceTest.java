@@ -31,6 +31,7 @@ public class UserServiceTest {
   private BasketRepository basketRepository;
 
   @Test
+  @Transactional
   public void expectSavedUserIdFound() {
 
     String userName = "Иван Семенович";
