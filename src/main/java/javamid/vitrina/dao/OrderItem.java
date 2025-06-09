@@ -12,6 +12,7 @@ public class OrderItem {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
   private String name;
+  @Lob
   private byte[] image;
   private BigDecimal price;
   private int quantity;

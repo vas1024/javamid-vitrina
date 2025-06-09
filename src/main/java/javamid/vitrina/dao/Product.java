@@ -12,6 +12,7 @@ public class Product {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
   private String name;
+  @Lob
   private byte[] image;
   private String description;
   private BigDecimal price;
