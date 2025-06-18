@@ -1,9 +1,12 @@
 package javamid.vitrina.repositories;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import javamid.vitrina.dao.Basket;
 
-import javamid.vitrina.dao.*;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Mono;
 
-public interface BasketRepository extends JpaRepository<Basket,Long> {
+public interface BasketRepository extends ReactiveCrudRepository<Basket, Long> {
+
+  Mono<Basket> findByUserId(Long userId);
 
 }

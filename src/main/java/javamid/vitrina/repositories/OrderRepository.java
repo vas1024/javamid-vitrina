@@ -1,12 +1,11 @@
 package javamid.vitrina.repositories;
 
-import javamid.vitrina.dao.*;
-import org.springframework.data.jpa.repository.JpaRepository;
+import javamid.vitrina.dao.Basket;
+import javamid.vitrina.dao.Order;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 
-public interface OrderRepository extends JpaRepository<Order,Long> {
-
-  public List<Order> findByUserId(Long userId);
+public interface OrderRepository extends ReactiveCrudRepository<Order, Long> {
 
 }

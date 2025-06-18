@@ -1,26 +1,32 @@
 package javamid.vitrina.repositories;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+
 import javamid.vitrina.dao.Product;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-
-public interface ProductRepository extends JpaRepository<Product,Long> {
-
-
+public interface ProductRepository extends ReactiveCrudRepository<Product, Long> {
 
   @Query("""
-    SELECT p FROM Product p 
-    WHERE 
-      LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
-      LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
-    """)
-  public  Page<Product> findByKeyword(String keyword, Pageable pageable);
+        SELECT p.* FROM products p 
+        WHERE 
+          LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR 
+          LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
+        ORDER BY ${#sort}
+        LIMIT :pageSize OFFSET :offset
+        """)
+  Flux<Product> findByKeyword(String keyword, int pageSize, long offset, String sort);
 
+  @Query("SELECT COUNT(*) FROM products WHERE " +
+          "LOWER(name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+          "LOWER(description) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+  Mono<Long> countByKeyword(String keyword);
 
-  @Query("SELECT p.image FROM Product p WHERE p.id = :id")
-  byte[] findImageById(Long id);
+  
+  @Query("SELECT image FROM products WHERE id = :id")
+  Mono<byte[]> findImageById(Long id);
+
 }
