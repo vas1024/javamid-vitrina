@@ -1,31 +1,27 @@
 package javamid.vitrina.dao;
 
-import jakarta.persistence.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
-import java.util.ArrayList;
-import java.util.List;
-
-@Entity
-@Table(name="baskets")
+@Table("baskets")
 public class Basket {
-
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @OneToOne
-  @JoinColumn(name = "user_id")  // Столбец с внешним ключом в таблице baskets
-  private User user;
+  @Column("user_id")
+  private Long userId;
 
-  @OneToMany(mappedBy = "basket", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER )
-  private List<BasketItem> basketItems = new ArrayList<>();
+  public Basket() {}
 
+  public Basket(Long id, Long userId) {
+    this.id = id;
+    this.userId = userId;
+  }
 
-  public void setId(Long id){this.id = id;}
-  public void setUser(User user){this.user = user;}
-  public void setBasketItems(List<BasketItem> basketItems){this.basketItems = basketItems;}
-  public Long getId(){return id;}
-  public User getUser(){return user;}
-  public List<BasketItem> getBasketItems(){return basketItems;}
+  public void setId(Long id) { this.id = id; }
+  public void setUserId(Long userId) { this.userId = userId; }
+  public Long getId() { return id; }
+  public Long getUserId() { return userId; }
 
 }

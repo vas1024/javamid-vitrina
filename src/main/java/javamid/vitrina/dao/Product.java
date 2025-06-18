@@ -1,18 +1,16 @@
 package javamid.vitrina.dao;
 
-import jakarta.persistence.*;
-
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 import java.math.BigDecimal;
 
-@Entity
 @Table(name="products")
 public class Product {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
   private String name;
-  @Lob
   private byte[] image;
   private String description;
   private BigDecimal price;
