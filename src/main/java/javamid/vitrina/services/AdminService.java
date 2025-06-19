@@ -1,20 +1,71 @@
 package javamid.vitrina.services;
 
 import com.opencsv.CSVReader;
-import com.opencsv.exceptions.CsvValidationException;
 import javamid.vitrina.dao.Product;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
-import org.springframework.web.multipart.MultipartFile;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
 
 @Service
+public class AdminService {
+
+  public Flux<Product> parseCsvWithOpenCsv(FilePart file) {
+    return Mono.fromCallable(() -> {
+              // Создаем CSVReader из содержимого файла
+              CSVReader reader = new CSVReader(
+                      new InputStreamReader(file.content().blockFirst().asInputStream())
+              );
+              return reader;
+            })
+            .flatMapMany(reader -> {
+              try {
+                reader.readNext(); // Пропускаем заголовок
+                return Flux.generate(() -> reader, (state, sink) -> {
+                  try {
+                    String[] nextLine = state.readNext();
+                    if (nextLine != null) {
+                      sink.next(createProduct(nextLine));
+                    } else {
+                      state.close();
+                      sink.complete();
+                    }
+                  } catch (Exception e) {
+                    sink.error(e);
+                  }
+                  return state;
+                });
+              } catch (Exception e) {
+                return Flux.error(e);
+              }
+            });
+  }
+
+  private Product createProduct(String[] nextLine) throws Exception {
+    Product product = new Product();
+    product.setName(nextLine[0]);
+    product.setDescription(nextLine[2]);
+    product.setPrice(BigDecimal.valueOf(Double.parseDouble(nextLine[3])));
+
+    // Загрузка изображения (блокирующая операция, но в fromCallable)
+    product.setImage(loadImageBytes(nextLine[1]));
+
+    return product;
+  }
+
+  private byte[] loadImageBytes(String path) throws Exception {
+    return StreamUtils.copyToByteArray(
+            new ClassPathResource(path).getInputStream()
+    );
+  }
+}
+
+/*
 public class AdminService {
 
 
@@ -40,3 +91,6 @@ public class AdminService {
   }
 
 }
+
+
+ */

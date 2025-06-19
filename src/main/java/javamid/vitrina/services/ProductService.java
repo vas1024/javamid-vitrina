@@ -1,27 +1,73 @@
 package javamid.vitrina.services;
 
-import jakarta.transaction.Transactional;
-import javamid.vitrina.repositories.BasketItemRepository;
-import javamid.vitrina.repositories.BasketRepository;
-import javamid.vitrina.repositories.OrderRepository;
-import javamid.vitrina.repositories.OrderItemRepository;
+
+import javamid.vitrina.dao.Product;
 import javamid.vitrina.repositories.ProductRepository;
-import javamid.vitrina.dao.*;
-import org.hibernate.Hibernate;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import jakarta.annotation.PostConstruct;
-import org.springframework.util.StreamUtils;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 
+@Service
+public class ProductService {
+
+  private final ProductRepository productRepository;
+
+  public ProductService(ProductRepository productRepository) {
+    this.productRepository = productRepository;
+  }
+
+  /**
+   * Сохраняет список продуктов (реактивная версия)
+   */
+  public Mono<Void> saveAll(List<Product> products) {
+    return Flux.fromIterable(products)
+            .flatMap(productRepository::save)
+            .then();
+  }
+
+/*
+  public Mono<Long> saveAllAndReturnCount(List<Product> products) {
+    return Flux.fromIterable(products)
+            .flatMap(productRepository::save)
+            .count();
+  }
+
+
+  public Flux<Product> searchProducts(String keyword, int page, int size, String sort) {
+    long offset = (long) page * size;
+    return productRepository.findByKeyword(keyword, size, offset, sort);
+  }
+
+
+  public Mono<byte[]> getProductImage(Long productId) {
+    return productRepository.findImageById(productId);
+  }
+
+
+  public Mono<Long> countProductsByKeyword(String keyword) {
+    return productRepository.countByKeyword(keyword);
+  }
+
+
+  public Mono<Void> saveInBatches(List<Product> products, int batchSize) {
+    return Flux.fromIterable(products)
+            .buffer(batchSize)
+            .flatMap(batch -> productRepository.saveAll(batch))
+            .then();
+  }
+
+
+  public Mono<Void> deleteAllProducts() {
+    return productRepository.deleteAll();
+  }
+
+  */
+}
+
+
+/*
 @Service
 public class ProductService {
   private final ProductRepository productRepository;
@@ -190,3 +236,5 @@ public class ProductService {
   }
 
 }
+
+ */

@@ -1,6 +1,6 @@
 package javamid.vitrina.services;
 
-
+/*
 import jakarta.transaction.Transactional;
 import javamid.vitrina.dao.*;
 import javamid.vitrina.repositories.BasketRepository;
@@ -30,3 +30,4 @@ public class UserService {
     return userRepository.save(user);
   }
 }
+*/

@@ -1,5 +1,6 @@
 package javamid.vitrina.controllers;
 
+/*
 import jakarta.annotation.PostConstruct;
 import javamid.vitrina.dao.Basket;
 import javamid.vitrina.dao.BasketItem;
@@ -271,3 +272,5 @@ public class ProductController {
   }
 
 }
+
+ */
