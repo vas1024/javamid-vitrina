@@ -1,18 +1,20 @@
 package javamid.vitrina.services;
 
 
+import jakarta.annotation.PostConstruct;
 import javamid.vitrina.dao.Product;
 import javamid.vitrina.dao.Basket;
 import javamid.vitrina.dao.BasketItem;
 import javamid.vitrina.dao.User;
-import javamid.vitrina.repositories.BasketItemRepository;
-import javamid.vitrina.repositories.BasketRepository;
-import javamid.vitrina.repositories.ProductRepository;
-import javamid.vitrina.repositories.UserRepository;
+import javamid.vitrina.repositories.*;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StreamUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 @Service
@@ -22,25 +24,39 @@ public class ProductService {
   private final BasketRepository basketRepository;
   private final BasketItemRepository basketItemRepository;
   private final UserRepository userRepository;
+  private final ProductImageRepository productImageRepository;
+
+  private byte[] cachedImage;
 
   public ProductService(ProductRepository productRepository,
                         BasketRepository basketRepository,
                         BasketItemRepository basketItemRepository,
-                        UserRepository userRepository  ) {
+                        UserRepository userRepository,
+                        ProductImageRepository productImageRepository  ) {
     this.productRepository = productRepository;
     this.basketRepository = basketRepository;
     this.basketItemRepository = basketItemRepository;
     this.userRepository = userRepository;
+    this.productImageRepository = productImageRepository;
   }
+
+
+  @PostConstruct
+  public void init() throws IOException {
+    String filePath = "static/No_Image_Available.jpg";  // Указываем путь ОТНОСИТЕЛЬНО папки `resources` (без `classpath:`)
+    ClassPathResource imgFile = new ClassPathResource(filePath);
+    this.cachedImage = StreamUtils.copyToByteArray(imgFile.getInputStream());
+  }
+
 
   /**
    * Сохраняет список продуктов (реактивная версия)
    */
-  public Mono<Void> saveAll(List<Product> products) {
-    return Flux.fromIterable(products)
-            .flatMap(productRepository::save)
-            .then();
-  }
+  public Flux<Product> saveProducts(List<Product> products) {
+    System.out.println("hello from productService.saveAll");
+          return Flux.fromIterable(products)
+              .flatMap(product -> productRepository.save(product));
+    }
 
   public Mono<Basket> getBasketById( Long id ){
     return basketRepository.findById( id );
@@ -61,6 +77,19 @@ public class ProductService {
   public Flux<Product> getProducts( String keyword, String sort, int page, int size ) {
     return productRepository.findAll();
   }
+
+
+  public Mono<byte[]> getImageByProductId(Long id) {
+    return productImageRepository.findImageById(id)
+            .switchIfEmpty(Mono.defer(() -> {
+              return Mono.just(cachedImage);
+            }));
+  }
+
+
+
+
+
 
 /*
   public Page<Product> getProducts(String keyword, String sort, int page, int size) {
@@ -248,10 +277,7 @@ public class ProductService {
   }
 
 
-  public byte[] getImageByProductId( Long id ){
-    if( id == 0L ) return cachedImage;
-    return productRepository.findImageById( id );
-  }
+
 
   public byte[] getImageByOrderItemId( Long id ){
     if( id == 0L ) return cachedImage;

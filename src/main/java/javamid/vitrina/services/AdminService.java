@@ -1,5 +1,5 @@
 package javamid.vitrina.services;
-
+/*
 import com.opencsv.CSVReader;
 import javamid.vitrina.dao.Product;
 import org.springframework.core.io.ClassPathResource;
@@ -54,6 +54,8 @@ public class AdminService {
 
     // Загрузка изображения (блокирующая операция, но в fromCallable)
     product.setImage(loadImageBytes(nextLine[1]));
+
+    System.out.println("Product: id: " + product.getId() + "  name: " + product.getName() + "  price: " + product.getPrice() );
 
     return product;
   }

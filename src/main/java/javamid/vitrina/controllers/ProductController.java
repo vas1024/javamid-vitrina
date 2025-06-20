@@ -38,14 +38,68 @@ public class ProductController {
 
   public ProductController(ProductService productService) {
     this.productService = productService;
+  }
 
+  @GetMapping("/")
+  public Mono<String> homePage() {
+    return Mono.just("redirect:/main/items");
+  }
+
+  @GetMapping("/main/items")
+  public Mono<String> getItems(
+          @RequestParam(name = "search", required = false, defaultValue = "") String keyword,
+          @RequestParam(name = "sort", defaultValue = "NO") String sort,
+          @RequestParam(name = "pageSize", defaultValue = "10") int size,
+          @RequestParam(name = "pageNumber", defaultValue = "1") int page,
+          Model model) {
+
+
+    Flux<Product> productFlux = productService.getProducts(keyword, sort, page - 1, size);
+
+    // Преобразуем Product в Item и собираем в список
+    Mono<List<Item>> itemsMono = productFlux
+            .map(product -> {
+              Item item = new Item(product);
+              item.setCount(0);
+              return item;
+            })
+            .collectList();
+
+    // Фиксированные значения пагинации
+    int pageNumber = 1;
+    int pageSize = 1;
+
+    // 3. Заполняем модель и возвращаем шаблон
+    return itemsMono
+            .doOnNext(itemList -> {
+              model.addAttribute("items", itemList);
+              model.addAttribute("search", keyword);
+              model.addAttribute("sort", sort);
+
+              // Фиктивная пагинация (всегда page=1, size=1)
+              Paging paging = new Paging();
+              paging.setPageNumber(pageNumber);
+              paging.setPageSize(pageSize);
+              paging.setNext(false); // Нет следующей страницы
+              paging.setPrevious(false); // Нет предыдущей страницы
+
+              model.addAttribute("paging", paging);
+            })
+            .thenReturn("main.html");
+  }
+
+
+  @GetMapping("/images/{id}")
+  public Mono<ResponseEntity<byte[]>> getImage(@PathVariable Long id) {
+    return productService.getImageByProductId(id)
+            .map(imageData -> ResponseEntity.ok()
+                    .contentType(MediaType.IMAGE_JPEG)
+                    .header(HttpHeaders.CACHE_CONTROL, "no-transform")
+                    .body(imageData));
   }
 
 
 }
-
-
-
 
   /*
 
@@ -158,15 +212,6 @@ public class ProductController {
             });
   }
 
-  @GetMapping("/images/{id}")
-  public Mono<ResponseEntity<byte[]>> getImage(@PathVariable Long id) {
-    return productService.getImageByProductIdReactive(id)
-            .map(imageData -> ResponseEntity.ok()
-                    .contentType(MediaType.IMAGE_JPEG)
-                    .contentLength(imageData.length)
-                    .header(HttpHeaders.CACHE_CONTROL, "no-transform")
-                    .body(imageData));
-  }
 
   @GetMapping("/orderimages/{id}")
   public Mono<ResponseEntity<byte[]>> getOrderImage(@PathVariable Long id) {

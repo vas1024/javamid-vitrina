@@ -92,15 +92,16 @@ public class AdminController {
 
   @PostMapping("/admin/upload/upload")
   public Mono<String> uploadToDatabase( Model model) {
-    return Mono.fromCallable(() -> {
-      System.out.println("Начало загрузки данных из файла: " );
-      productService.saveAll(products);
-      System.out.println("Данные из файла  успешно загружены");
-      model.addAttribute("message", "Данные из файла загружены в БД");
-      model.addAttribute("enableUpload", false);
-      return "admin_upload.html";
-    });
+    return productService.saveProducts(products)
+            .collectList()  // Преобразуем Flux<Product> в Mono<List<Product>>
+            .doOnNext(savedProducts -> {
+              // Добавляем атрибуты в модель после успешного сохранения
+              model.addAttribute("message", "Успешно сохранено " + savedProducts.size() + " товаров");
+              model.addAttribute("enableUpload", false);
+            })
+            .thenReturn("admin_upload");  // Возвращаем имя шаблона
   }
+
 
   private Mono<String> processCsvFile(Path csvPath, Path baseDir, FilePart zipFile, Model model) {
     return Mono.fromCallable(() -> {
@@ -118,6 +119,8 @@ public class AdminController {
           if (!filePath.isEmpty()) {
             product.setImage(Files.readAllBytes(baseDir.resolve(filePath)));
           }
+
+          System.out.println("Product: id: " + product.getId() + "  name: " + product.getName() + "  price: " + product.getPrice() );
 
           products.add(product);
         }

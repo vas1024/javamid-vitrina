@@ -9,9 +9,14 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.nio.ByteBuffer;
+
 @Repository
 public interface ProductRepository extends ReactiveCrudRepository<Product, Long> {
 
+
+  @Query("SELECT image FROM products WHERE id = :id")
+  Mono<ByteBuffer> findImageById(Long id);
 
   /*
 
@@ -31,8 +36,7 @@ public interface ProductRepository extends ReactiveCrudRepository<Product, Long>
   Mono<Long> countByKeyword(String keyword);
 
 
-  @Query("SELECT image FROM products WHERE id = :id")
-  Mono<byte[]> findImageById(Long id);
+
 
   */
 }

@@ -57,4 +57,13 @@ class UserServiceTest {
                     );
   }
 
+  @Test
+  public void testGetListOfProducts2() {
+    productService.getProducts("", "", 1, 1)
+            .doOnNext(product -> System.out.println("Product: " + product.getId() +
+                    "   " + product.getDescription() + "  image: " + product.getImage() ))
+            .subscribe(); // важно вызвать subscribe()
+  }
+
+
 }
