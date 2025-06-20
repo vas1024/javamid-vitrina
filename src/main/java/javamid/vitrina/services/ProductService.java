@@ -2,7 +2,13 @@ package javamid.vitrina.services;
 
 
 import javamid.vitrina.dao.Product;
+import javamid.vitrina.dao.Basket;
+import javamid.vitrina.dao.BasketItem;
+import javamid.vitrina.dao.User;
+import javamid.vitrina.repositories.BasketItemRepository;
+import javamid.vitrina.repositories.BasketRepository;
 import javamid.vitrina.repositories.ProductRepository;
+import javamid.vitrina.repositories.UserRepository;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -13,9 +19,18 @@ import java.util.List;
 public class ProductService {
 
   private final ProductRepository productRepository;
+  private final BasketRepository basketRepository;
+  private final BasketItemRepository basketItemRepository;
+  private final UserRepository userRepository;
 
-  public ProductService(ProductRepository productRepository) {
+  public ProductService(ProductRepository productRepository,
+                        BasketRepository basketRepository,
+                        BasketItemRepository basketItemRepository,
+                        UserRepository userRepository  ) {
     this.productRepository = productRepository;
+    this.basketRepository = basketRepository;
+    this.basketItemRepository = basketItemRepository;
+    this.userRepository = userRepository;
   }
 
   /**
@@ -26,6 +41,51 @@ public class ProductService {
             .flatMap(productRepository::save)
             .then();
   }
+
+  public Mono<Basket> getBasketById( Long id ){
+    return basketRepository.findById( id );
+  }
+
+  public Flux<BasketItem> getBasketItemsByBasketId( Long basketId ){
+    return basketItemRepository.findByBasketId( basketId );
+  }
+
+  public Mono<Product> getProductById( Long id ) {
+    return productRepository.findById(id);
+  }
+
+  public Mono<User> getUserById( Long id ) {
+    return userRepository.findById( id );
+  }
+
+  public Flux<Product> getProducts( String keyword, String sort, int page, int size ) {
+    return productRepository.findAll();
+  }
+
+/*
+  public Page<Product> getProducts(String keyword, String sort, int page, int size) {
+    String sortBy = "id";
+    if( sort.equals("NO") )    sortBy = "id";
+    if( sort.equals("ALPHA") ) sortBy = "name";
+    if( sort.equals("PRICE") ) sortBy = "price";
+    System.out.println("___Sort by " + sortBy);
+    PageRequest pageable = PageRequest.of(page, size, Sort.by(sortBy ));  // Страница 0-based
+    return productRepository.findByKeyword(keyword, pageable);
+  }
+
+
+    public Flux<Product> searchProducts(String keyword, int page, int size, String sort) {
+    long offset = (long) page * size;
+    return productRepository.findByKeyword(keyword, size, offset, sort);
+  }
+
+*/
+
+
+
+
+
+
 
 /*
   public Mono<Long> saveAllAndReturnCount(List<Product> products) {
@@ -99,20 +159,9 @@ public class ProductService {
   }
 
 
-  public Page<Product> getProducts(String keyword, String sort, int page, int size) {
-    String sortBy = "id";
-    if( sort.equals("NO") )    sortBy = "id";
-    if( sort.equals("ALPHA") ) sortBy = "name";
-    if( sort.equals("PRICE") ) sortBy = "price";
-    System.out.println("___Sort by " + sortBy);
-    PageRequest pageable = PageRequest.of(page, size, Sort.by(sortBy ));  // Страница 0-based
-    return productRepository.findByKeyword(keyword, pageable);
-  }
 
-  public Product getProductById( Long id ) {
-    Product product = productRepository.findById(id).get();
-    return product;
-  }
+
+
 
   public void addProductToBasket( Long productId, Long basketId ) {
     Basket basket = basketRepository.findById( basketId ).get();
@@ -219,10 +268,7 @@ public class ProductService {
     else return basketOptional.get();
   }
 
-  public List<BasketItem> getBasketItemsByBasketId( Long basketId ){
-    Basket basket = basketRepository.findById( basketId ).get();
-    return basket.getBasketItems();
-  }
+
 
   public List<Order> findAllOrders( Long basketId ){
     List<Order> orders = orderRepository.findAll();

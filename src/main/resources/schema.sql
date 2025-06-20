@@ -76,3 +76,9 @@ ALTER TABLE users ADD CONSTRAINT fk_user_basket
     FOREIGN KEY (basket_id) REFERENCES baskets(id);
 
 
+-- create one user and basket
+MERGE INTO baskets KEY (id) VALUES (1, NULL);
+MERGE INTO users KEY (id) VALUES (1, 'Иван Иванович', 1);
+UPDATE baskets SET user_id = 1 WHERE id = 1;
+
+
