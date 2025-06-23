@@ -6,6 +6,7 @@ import javamid.vitrina.dao.Product;
 import javamid.vitrina.dao.Basket;
 import javamid.vitrina.dao.BasketItem;
 import javamid.vitrina.dao.User;
+import javamid.vitrina.model.Item;
 import javamid.vitrina.repositories.*;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -66,9 +67,11 @@ public class ProductService {
     return basketItemRepository.findByBasketId( basketId );
   }
 
+
   public Mono<Product> getProductById( Long id ) {
     return productRepository.findById(id);
   }
+
 
   public Mono<User> getUserById( Long id ) {
     return userRepository.findById( id );
@@ -87,8 +90,114 @@ public class ProductService {
   }
 
 
+  public Mono<Item> getProductItem(Long productId, Long basketId) {
+    return Mono.zip(
+                    productRepository.findById(productId)
+                            .switchIfEmpty(Mono.defer(() -> {
+                              System.out.println("Product not found, id: " + productId);
+                              return Mono.error(new RuntimeException("Product not found"));
+                            })),
+
+                    basketItemRepository.getQuantity(basketId, productId)
+                            .defaultIfEmpty(0)
+                            .doOnNext(q -> System.out.println("Quantity: " + q))
+            )
+            .map(tuple -> {
+              Product product = tuple.getT1();
+              Integer quantity = tuple.getT2();
+
+              Item item = new Item(product);
+              item.setCount(quantity);
+              System.out.println("Created item: " + item.getDescription());
+
+              return item;
+            })
+            .doOnError(e -> System.err.println("Error in getProductItem: " + e));
+  }
 
 
+  public Flux<Item> getBasketItems( Long basketId ){
+    return basketItemRepository.findBasketItemsAndProducts( basketId );
+  }
+
+
+  public Mono<Void> plusMinusDelete(Long productId, Long basketId, String action) {
+    return Mono.just(action)
+            .flatMap(act -> {
+              switch (act) {
+                case "plus":
+                  return basketItemRepository.findByBasketIdAndProductId(basketId, productId)
+                          .flatMap(basketItem -> {
+                            int newQuantity = basketItem.getQuantity() + 1;
+                            return basketItemRepository.updateQuantity(basketId, productId, newQuantity);
+                          })
+                          .switchIfEmpty(
+                                Mono.defer(() -> {
+                                  BasketItem newItem = new BasketItem();
+                                  newItem.setBasketId(basketId);
+                                  newItem.setProductId(productId);
+                                  newItem.setQuantity(1);
+                                  return basketItemRepository.save(newItem).then();
+                                })
+                        );
+
+                case "minus":
+                  return basketItemRepository.findByBasketIdAndProductId(basketId, productId)
+                          .flatMap(basketItem -> {
+                            if (basketItem.getQuantity() > 1) {
+                              return basketItemRepository.updateQuantity(basketId, productId, basketItem.getQuantity() - 1);
+                            } else {
+                              return basketItemRepository.deleteByBasketIdAndProductId(basketId, productId);
+                            }
+                          });
+
+                case "delete":
+                  return basketItemRepository.deleteByBasketIdAndProductId(basketId, productId);
+
+                default:
+                  return Mono.error(new IllegalArgumentException("Invalid action: " + action));
+              }
+            })
+            .then();
+  }
+
+  /*
+  public Mono<Item> getProductItem(Long productId, Long basketId) {
+    // Логируем входные параметры
+    System.out.println("[Service] Called getProductItem with productId=" + productId + ", basketId=" + basketId);
+
+    Mono<Product> productMono = productRepository.findById(productId)
+            .doOnNext(p -> System.out.println("[Service] Found product: " + p))
+            .doOnError(e -> System.err.println("[Service] Error finding product: " + e))
+            .doOnSubscribe(s -> System.out.println("[Service] Starting product search"));
+
+    Mono<Integer> quantityMono = basketItemRepository.getQuantity(basketId, productId)
+            .doOnNext(q -> System.out.println("[Service] Found quantity: " + q))
+            .doOnError(e -> System.err.println("[Service] Error getting quantity: " + e))
+            .doOnSubscribe(s -> System.out.println("[Service] Starting quantity search"));
+
+    Mono<Integer> quantityMonoSafe = quantityMono.defaultIfEmpty(0)
+            .doOnNext(q -> System.out.println("[Service] Quantity after default: " + q));
+
+    return Mono.zip(productMono, quantityMonoSafe)
+            .doOnSubscribe(s -> System.out.println("[Service] Starting zip operation"))
+            .doOnNext(t -> System.out.println("[Service] Zip completed with values: " + t))
+            .map(tuple -> {
+              Product product = tuple.getT1();
+              int count = tuple.getT2();
+              System.out.println("[Service] Creating Item with product=" + product + ", count=" + count);
+
+              Item item = new Item(product);
+              item.setCount(count);
+              System.out.println("[Service] Created item: " + item);
+
+              return item;
+            })
+            .doOnError(e -> System.err.println("[Service] Error in zip/map: " + e))
+            .doOnSuccess(i -> System.out.println("[Service] Successfully created item: " + i))
+            .doOnTerminate(() -> System.out.println("[Service] Processing terminated"));
+  }
+*/
 
 
 /*

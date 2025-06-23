@@ -3,6 +3,7 @@ package javamid.vitrina.repositories;
 
 import javamid.vitrina.dao.Product;
 
+import javamid.vitrina.model.Item;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
@@ -17,6 +18,9 @@ public interface ProductRepository extends ReactiveCrudRepository<Product, Long>
 
   @Query("SELECT image FROM products WHERE id = :id")
   Mono<ByteBuffer> findImageById(Long id);
+
+
+
 
   /*
 

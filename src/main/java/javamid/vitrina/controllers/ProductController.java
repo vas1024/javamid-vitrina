@@ -10,11 +10,15 @@ import javamid.vitrina.dao.Order;
 import javamid.vitrina.dao.OrderItem;
 import javamid.vitrina.services.ProductService;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
@@ -39,6 +43,8 @@ public class ProductController {
   public ProductController(ProductService productService) {
     this.productService = productService;
   }
+
+  public Long currentBasket() { return 1L; }
 
   @GetMapping("/")
   public Mono<String> homePage() {
@@ -67,9 +73,9 @@ public class ProductController {
 
     // Фиксированные значения пагинации
     int pageNumber = 1;
-    int pageSize = 1;
+    int pageSize = 10;
 
-    // 3. Заполняем модель и возвращаем шаблон
+    //  Заполняем модель и возвращаем шаблон
     return itemsMono
             .doOnNext(itemList -> {
               model.addAttribute("items", itemList);
@@ -99,274 +105,312 @@ public class ProductController {
   }
 
 
-}
+  @GetMapping("/items/{id}")
+  public Mono<String> getItem(@PathVariable(name="id") long id,
+                        Model model ) {
+//    Mono<Item> itemMono = productService.getProductItem(id, currentBasket());
+    return productService.getProductItem(id, currentBasket())
+            .doOnNext(item -> {
+              model.addAttribute("item", item);
+//              System.out.println("Item = " + item.getDescription());
+            })
+            .doOnError(e -> System.err.println("Error: " + e)) // Добавлено
+            .thenReturn("item.html")
+            .switchIfEmpty(Mono.defer(() -> {
+              System.out.println("Item not found for id: " + id); // Добавлено
+              return Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND));
+            }));
 
-  /*
-
-  @GetMapping("/{id}")
-  public Mono<String> getUserById(@PathVariable Long id, Model model) {
-    return orderService.findById(id)
-            .doOnNext(order -> model.addAttribute("order", order)) // Передаём готовый объект в модель
-            .map(order -> "order") // Возвращаем order.html
-            .defaultIfEmpty("not-found"); // Если Mono<Order> пустой, то отдаём not-found.html
   }
+
+  @GetMapping("/cart/items")
+  public Mono<String> getBasket( Model model ){
+    Flux<Item> basketItems = productService.getBasketItems( currentBasket() ) ;
+    return basketItems
+            .collectList()  // собираем Flux в Mono<List<Item>>
+            .doOnNext(items -> {
+              model.addAttribute("items", items);
+              model.addAttribute("empty", items.isEmpty());
+            })
+            .thenReturn("cart.html");
+  }
+
+
+  @PostMapping("/items/{id}")
+  public Mono<String> addRemoveDeleteProductInProductItem( @PathVariable(name="id") long id,
+                                                     @RequestParam String action,
+                                                     Model model ) {
+    return productService.plusMinusDelete(id, currentBasket(), action)
+            .thenReturn("redirect:/items/" + id);
+  }
+
+
+
+  @PostMapping("/cart/items/{id}")
+  public Mono<String> addRemoveDeleteProductInBasket( @PathVariable(name="id") long id,
+                                                @RequestParam String action,
+                                                Model model ) {
+    return productService.plusMinusDelete( id, currentBasket(), action )
+            .thenReturn( "redirect:/cart/items" );
+  }
+
+/*
+  @PostMapping("/main/items/{id}")
+  public Mono<String> fallbackHandler(ServerWebExchange exchange) {
+    return exchange.getFormData()
+            .doOnNext(formData -> System.out.println("Raw form data: " + formData))
+            .thenReturn("redirect:/main/items");
+  }
+*/
+
+  @PostMapping(value = "/main/items/{id}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE )
+  public Mono<String> addRemoveDeleteProductInMain( @PathVariable(name="id") long id,
+// does not work !!!                                @RequestParam(name="action") String action
+                                                    ServerWebExchange exchange
+  ) {
+
+    return exchange.getFormData()
+            .flatMap(formData -> {
+              String action = formData.getFirst("action");
+              System.out.println("Processing action: " + action + " for item: " + id);
+
+              // Ваша бизнес-логика
+              return productService.plusMinusDelete(id, currentBasket(), action)
+                      .thenReturn("redirect:/main/items");
+            })
+            .onErrorResume(e -> {
+              System.err.println("Error processing action: " + e.getMessage());
+              return Mono.just("redirect:/main/items?error=processing_failed");
+            });
+
+  }
+
+
+
+
 }
 
-   */
+
+
+
 
 
 
 
 
 /*
+
 @Controller
-@RequestMapping("/products")
 public class ProductController {
 
   private final ProductService productService;
   private final UserService userService;
-
   public ProductController(ProductService productService,
-                                   UserService userService) {
+                           UserService userService) {
     this.productService = productService;
     this.userService = userService;
   }
 
-  // Получение корзины с актуальными данными
-  private Mono<Basket> getBasketData() {
-    return productService.getBasketById(1L)
-            .flatMap(basket -> {
-              // Получаем элементы корзины отдельным запросом
-              return productService.getBasketItemsByBasketId(basket.getId())
-                      .collectList()
-                      .flatMap(items -> {
-                        // Получаем полные данные о продуктах
-                        return Flux.fromIterable(items)
-                                .flatMap(basketItem ->
-                                        productService.getProductById(basketItem.getProductId())
-                                                .map(product -> new Pair<>(product, basketItem.getQuantity()))
-                                )
-                                .collectList()
-                                .map(productQuantityPairs -> {
-                                  Map<Long, Integer> productsMap = new HashMap<>();
-                                  BigDecimal total = BigDecimal.ZERO;
+  private  Basket basket;
+  private  Map<Long,Integer> productsInThisBasket = new HashMap<>();
+  private  BigDecimal inTotal;
 
-                                  for (Pair<Product, Integer> pair : productQuantityPairs) {
-                                    Product product = pair.getFirst();
-                                    Integer quantity = pair.getSecond();
-                                    productsMap.put(product.getId(), quantity);
-                                    total = total.add(product.getPrice()
-                                            .multiply(BigDecimal.valueOf(quantity)));
-                                  }
 
-                                  return new Basket(basket, productsMap, total);
-                                });
-                      });
-            });
+
+  public void refreshBasket(){
+    this.basket = productService.getBasketById(1L);
+    List<BasketItem> basketItems = basket.getBasketItems();
+    Map<Long,Integer> productsInThisBasketRefreshed = new HashMap<>();
+    BigDecimal sum = BigDecimal.valueOf(0);
+    for ( BasketItem basketItem : basketItems ){
+      Product product = basketItem.getProduct();
+      int quantity = basketItem.getQuantity();
+      productsInThisBasketRefreshed.put(product.getId(),quantity);
+
+      BigDecimal price = product.getPrice();
+      sum = sum.add( price.multiply(BigDecimal.valueOf(quantity)) );
+    }
+    this.productsInThisBasket = productsInThisBasketRefreshed;
+    this.inTotal = sum;
+
+    System.out.println("after refresh basket");
+    System.out.println("productsInThisBasket: " + productsInThisBasket );
+    System.out.println("inTotal: " + inTotal );
   }
 
 
 
-
-
-  @GetMapping("/")
-  public Mono<String> homePage() {
-    return Mono.just("redirect:/main/items");
-  }
 
   @GetMapping("/main/items")
-  public Mono<String> getItems(
-          @RequestParam(name = "search", required = false, defaultValue = "") String keyword,
-          @RequestParam(name = "sort", defaultValue = "NO") String sort,
+  public String getItems(
+          @RequestParam(name = "search", required = false, defaultValue = "" ) String keyword,
+          @RequestParam(name = "sort",  defaultValue = "NO" ) String sort,
           @RequestParam(name = "pageSize", defaultValue = "10") int size,
           @RequestParam(name = "pageNumber", defaultValue = "1") int page,
-          Model model) {
+          Model model
+          ) {
 
-    return productService.getProductsReactive(keyword, sort, page - 1, size)
-            .flatMap(productPage -> {
-              return Flux.fromIterable(productPage.getContent())
-                      .flatMap(product -> {
-                        return getCurrentBasketData()
-                                .map(basketData -> {
-                                  Map<Long, Integer> productsInBasket = (Map<Long, Integer>) basketData.get("productsInBasket");
-                                  Item item = new Item(product);
-                                  item.setCount(productsInBasket.getOrDefault(product.getId(), 0));
-                                  return item;
-                                });
-                      })
-                      .collectList()
-                      .map(itemList -> {
-                        model.addAttribute("items", itemList);
+    Page<Product> productPage = productService.getProducts( keyword, sort,page - 1, size );
 
-                        Paging paging = new Paging();
-                        paging.setPageNumber(productPage.getNumber() + 1);
-                        paging.setPageSize(productPage.getSize());
-                        paging.setNext(productPage.hasNext());
-                        paging.setPrevious(productPage.hasPrevious());
+    List<Item> itemList = new ArrayList<>();
+    for( Product product : productPage.getContent() ){
+      Item item = new Item(product);
+      int count = productsInThisBasket.getOrDefault(product.getId(), 0);
+      item.setCount(count);
+      itemList.add( item );
+    }
 
-                        model.addAttribute("paging", paging);
-                        model.addAttribute("search", keyword);
-                        model.addAttribute("sort", sort);
-                        return "main";
-                      });
-            });
+    model.addAttribute("items", itemList);
+
+
+    Paging paging = new Paging();
+    paging.setPageNumber( productPage.getNumber() + 1 );
+    paging.setPageSize( productPage.getSize() );
+    paging.setNext( productPage.hasNext() );
+    paging.setPrevious( productPage.hasPrevious() );
+
+    model.addAttribute("paging", paging );
+    model.addAttribute("search", keyword );
+    model.addAttribute("sort",   sort );
+    return "main.html";
   }
+
+
 
 
   @GetMapping("/orderimages/{id}")
-  public Mono<ResponseEntity<byte[]>> getOrderImage(@PathVariable Long id) {
-    return productService.getImageByOrderItemIdReactive(id)
-            .map(imageData -> ResponseEntity.ok()
-                    .contentType(MediaType.IMAGE_JPEG)
-                    .contentLength(imageData.length)
-                    .header(HttpHeaders.CACHE_CONTROL, "no-transform")
-                    .body(imageData));
+  public ResponseEntity<byte[]> getOrderImage(@PathVariable( name = "id" ) Long id) throws IOException {
+    byte[]  imageData = productService.getImageByOrderItemId(id); // image хранится как byte[]
+    return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_TYPE, "image/jpeg")  // Жёстко задаём тип
+            .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(imageData.length))
+            .header(HttpHeaders.CACHE_CONTROL, "no-transform") // Запрещаем преобразования
+            .body(imageData);
   }
+
 
   @GetMapping("/items/{id}")
-  public Mono<String> getItem(@PathVariable Long id, Model model) {
-    return productService.getProductByIdReactive(id)
-            .zipWith(getCurrentBasketData())
-            .map(tuple -> {
-              Product product = tuple.getT1();
-              Map<Long, Integer> productsInBasket = (Map<Long, Integer>) tuple.getT2().get("productsInBasket");
-
-              Item item = new Item(product);
-              item.setCount(productsInBasket.getOrDefault(id, 0));
-              model.addAttribute("item", item);
-              return "item";
-            });
+  public String getItem(@PathVariable(name="id") long id,
+                        Model model ){
+    Product product = productService.getProductById(id);
+    Item item = new Item(product);
+    int count = productsInThisBasket.getOrDefault(id,0);
+    item.setCount(count);
+    model.addAttribute("item", item);
+    return "item.html";
   }
 
-  private Mono<Void> handleBasketAction(Long productId, String action) {
-    return getCurrentBasketData()
-            .flatMap(basketData -> {
-              Basket basket = (Basket) basketData.get("basket");
-              return switch (action) {
-                case "plus" -> productService.addProductToBasketReactive(productId, basket.getId());
-                case "minus" -> productService.removeProductFromBasketReactive(productId, basket.getId());
-                case "delete" -> productService.dropProductFromBasketReactive(productId, basket.getId());
-                default -> Mono.empty();
-              };
-            });
+
+
+  public void plusMinusDelete( Long id, String action ){
+    Long basketId = basket.getId();
+    if( action.equals("plus") )   productService.addProductToBasket(id,basketId );
+    if( action.equals("minus") )  productService.removeProductFromBasket(id,basketId );
+    if( action.equals("delete") ) productService.dropProductFromBasket(id,basketId );
+    refreshBasket();
   }
 
   @PostMapping("/items/{id}")
-  public Mono<String> handleProductItemAction(
-          @PathVariable Long id,
-          @RequestParam String action,
-          Model model) {
-    return handleBasketAction(id, action)
-            .thenReturn("redirect:/items/" + id);
+  public String addRemoveDeleteProductInProductItem( @PathVariable(name="id") long id,
+                                @RequestParam String action,
+                                Model model ) {
+    plusMinusDelete( id, action );
+    return "redirect:/items/{id}";
   }
 
   @PostMapping("/cart/items/{id}")
-  public Mono<String> handleBasketItemAction(
-          @PathVariable Long id,
-          @RequestParam String action,
-          Model model) {
-    return handleBasketAction(id, action)
-            .thenReturn("redirect:/cart/items");
+  public String addRemoveDeleteProductInBasket( @PathVariable(name="id") long id,
+                                                @RequestParam String action,
+                                                Model model ) {
+    plusMinusDelete( id, action );
+    return "redirect:/cart/items";
   }
 
   @PostMapping("/main/items/{id}")
-  public Mono<String> handleMainPageItemAction(
-          @PathVariable Long id,
-          @RequestParam String action,
-          Model model) {
-    return handleBasketAction(id, action)
-            .thenReturn("redirect:/main/items");
+  public String addRemoveDeleteProductInMain( @PathVariable(name="id") long id,
+                                              @RequestParam String action,
+                                              Model model ) {
+    plusMinusDelete( id, action );
+    return "redirect:/main/items";
   }
 
-  @GetMapping("/cart/items")
-  public Mono<String> getBasket(Model model) {
-    return getCurrentBasketData()
-            .map(basketData -> {
-              Basket basket = (Basket) basketData.get("basket");
-              List<Item> itemList = basket.getBasketItems().stream()
-                      .map(basketItem -> {
-                        Item item = new Item(basketItem.getProduct());
-                        item.setCount(basketItem.getQuantity());
-                        return item;
-                      })
-                      .toList();
 
-              model.addAttribute("items", itemList);
-              model.addAttribute("empty", itemList.isEmpty());
-              model.addAttribute("total", basketData.get("total"));
-              return "cart";
-            });
-  }
+
+
+
 
   @GetMapping("/orders")
-  public Mono<String> getOrders(Model model) {
-    return getCurrentBasketData()
-            .flatMap(basketData -> {
-              Basket basket = (Basket) basketData.get("basket");
-              return productService.findAllOrdersReactive(basket.getId())
-                      .collectList()
-                      .map(orders -> {
-                        List<OrderModel> orderModels = orders.stream()
-                                .map(order -> {
-                                  BigDecimal total = order.getOrderItems().stream()
-                                          .map(oi -> oi.getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
-                                          .reduce(BigDecimal.ZERO, BigDecimal::add);
+  public String getOrders( Model model ){
+    Long basketId = basket.getId();
+    List<Order> orderList = productService.findAllOrders( basketId );
 
-                                  List<Item> items = order.getOrderItems().stream()
-                                          .map(Item::new)
-                                          .toList();
+    record OrderModel( Long id, BigDecimal totalSum, List<Item> items ) {}
+    List<OrderModel> orderModelList = new ArrayList<>();
+    for( Order order : orderList ){
+      List<OrderItem> orderItemList = order.getOrderItems();
+      System.out.println("!!!!! " + orderItemList );
+      BigDecimal inTotal = BigDecimal.valueOf(0);
+      List<Item> itemList = new ArrayList<>();
+      for( OrderItem orderItem : orderItemList ){
+        Item item = new Item(orderItem);
+        itemList.add( item );
+        inTotal = inTotal.add(orderItem.getPrice().multiply(BigDecimal.valueOf(orderItem.getQuantity())));
+      }
+      OrderModel orderModel = new OrderModel( order.getId(), inTotal, itemList );
+      orderModelList.add( orderModel );
+    }
+    model.addAttribute("orders", orderModelList );
 
-                                  return new OrderModel(order.getId(), total, items);
-                                })
-                                .toList();
+    for( OrderModel orderModel : orderModelList ){
+      System.out.println( orderModel.id() );
+      for( Item item : orderModel.items() ){
+        System.out.println( "- " + item.getId() + " " + item.getTitle() );
+      }
+    }
 
-                        model.addAttribute("orders", orderModels);
-                        return "orders";
-                      });
-            });
+    return "orders.html";
   }
+
+
 
   @GetMapping("/orders/{id}")
-  public Mono<String> getOrder(
-          @PathVariable Long orderId,
-          @RequestParam(name = "newOrder", required = false, defaultValue = "false") Boolean newOrder,
-          Model model) {
+  public String getOrder( @PathVariable(name="id") long orderId,
+                          @RequestParam(name = "newOrder", required = false, defaultValue = "false" ) Boolean newOrder,
+                          Model model ) {
 
-    return productService.findOrderByIdReactive(orderId)
-            .map(order -> {
-              BigDecimal total = order.getOrderItems().stream()
-                      .map(oi -> oi.getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
-                      .reduce(BigDecimal.ZERO, BigDecimal::add);
+//    Long basketId = basket.getId();
+    Order order = productService.findOrderById( orderId );
 
-              List<Item> items = order.getOrderItems().stream()
-                      .map(oi -> {
-                        Item item = new Item(oi);
-                        item.setId(oi.getProductId());
-                        return item;
-                      })
-                      .toList();
+    BigDecimal inTotal = BigDecimal.valueOf(0);
+    List<Item> itemList = new ArrayList<>();
+    for( OrderItem orderItem : order.getOrderItems() ) {
+      Item item = new Item(orderItem);
+      item.setId(orderItem.getProductId());  // это костыль, чтобы при клике на картинку шел переход по ссылке на товар
+      itemList.add( item );
+      inTotal = inTotal.add(orderItem.getPrice().multiply(BigDecimal.valueOf(orderItem.getQuantity())));
+    }
 
-              model.addAttribute("order", new OrderModel(orderId, total, items));
-              return "order";
-            });
+    record OrderModel( Long id, BigDecimal totalSum, List<Item> items ) {}
+    OrderModel orderModel = new OrderModel( orderId, inTotal, itemList );
+    model.addAttribute("order", orderModel );
+    return "order.html";
   }
+
+
 
   @PostMapping("/buy")
-  public Mono<String> postBuy(RedirectAttributes redirectAttributes) {
-    return getCurrentBasketData()
-            .flatMap(basketData -> {
-              Basket basket = (Basket) basketData.get("basket");
-              return productService.makeOrderReactive(basket);
-            })
-            .flatMap(orderId -> {
-              redirectAttributes.addAttribute("id", orderId);
-              redirectAttributes.addFlashAttribute("newOrder", true);
-              return Mono.just("redirect:/orders/" + orderId);
-            });
+  public String postBuy( RedirectAttributes redirectAttributes ){
+
+    Long id = productService.makeOrder( basket );
+    System.out.println("Buy id : " + id);
+    redirectAttributes.addAttribute("id", id); // для URL
+    redirectAttributes.addFlashAttribute("newOrder", true); // для модели
+    return "redirect:/orders/{id}";
   }
 
-  // Вспомогательная record для заказов
-  record OrderModel(Long id, BigDecimal totalSum, List<Item> items) {}
 }
 
+
  */
+
+

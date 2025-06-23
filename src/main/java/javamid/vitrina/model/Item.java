@@ -22,6 +22,8 @@ public class Item {
   public int getCount(){ return count; }
   public String getImgPath(){ return imgPath; }
 
+  public Item(){}
+
   public Item( Product product ){
     this.id = product.getId();
     this.title = product.getName();

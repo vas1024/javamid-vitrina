@@ -4,7 +4,6 @@
 <head>
     <title>Витрина товаров</title>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 </head>
 
 <body>
@@ -73,6 +72,8 @@
                     <tr>
                         <td th:text="${item.getDescription()}"></td>
                     </tr>
+
+
                     <tr>
                         <td>
                             <form th:action="${'/main/items/'+item.getId()}" method="post">
@@ -83,6 +84,18 @@
                             </form>
                         </td>
                     </tr>
+
+<!--
+                    <form th:action="@{'/main/items/' + ${item.id}}"
+                          method="post"
+                          enctype="application/x-www-form-urlencoded">
+                        <button type="submit" name="action" value="minus">-</button>
+                        <span th:text="${item.count}"></span>
+                        <button type="submit" name="action" value="plus">+</button>
+                    </form>
+-->
+
+
                 </table>
             </td>
         </tr>
