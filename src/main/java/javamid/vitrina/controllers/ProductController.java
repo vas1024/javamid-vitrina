@@ -51,6 +51,9 @@ public class ProductController {
     return Mono.just("redirect:/main/items");
   }
 
+
+  /*
+
   @GetMapping("/main/items")
   public Mono<String> getItems(
           @RequestParam(name = "search", required = false, defaultValue = "") String keyword,
@@ -61,15 +64,25 @@ public class ProductController {
 
 
     Flux<Product> productFlux = productService.getProducts(keyword, sort, page - 1, size);
+    Flux<BasketItem> basketItemFlux = productService.getBasketItems( currentBasket() );
 
-    // Преобразуем Product в Item и собираем в список
-    Mono<List<Item>> itemsMono = productFlux
-            .map(product -> {
-              Item item = new Item(product);
-              item.setCount(0);
-              return item;
-            })
-            .collectList();
+
+// Сначала собираем корзину в Map для быстрого поиска
+    Mono<Map<Long, Integer>> basketItemsMapMono = basketItemFlux
+            .collectMap(BasketItem::getProductId, BasketItem::getQuantity);
+
+// Затем обрабатываем продукты с учетом данных из корзины
+    Mono<List<Item>> itemsMono = basketItemsMapMono.flatMap(basketItemsMap ->
+            productFlux
+                    .map(product -> {
+                      Item item = new Item(product);
+                      // Устанавливаем количество из корзины или 0, если продукта нет в корзине
+                      item.setCount(basketItemsMap.getOrDefault(product.getId(), 0));
+                      return item;
+                    })
+                    .collectList()
+    );
+
 
     // Фиксированные значения пагинации
     int pageNumber = 1;
@@ -94,6 +107,62 @@ public class ProductController {
             .thenReturn("main.html");
   }
 
+  */
+
+
+  @GetMapping("/main/items")
+  public Mono<String> getItems(
+          @RequestParam(name = "search", required = false, defaultValue = "") String keyword,
+          @RequestParam(name = "sort", defaultValue = "NO") String sort,
+          @RequestParam(name = "pageSize", defaultValue = "10") int size,
+          @RequestParam(name = "pageNumber", defaultValue = "1") int page,
+          Model model) {
+
+    Mono<Long> totalItemsMono = productService.countProducts(keyword, sort, page - 1, size);
+    Flux<Product> productFlux = productService.getProducts(keyword, sort, page - 1, size);
+    Flux<BasketItem> basketItemFlux = productService.getBasketItems(currentBasket());
+
+    Mono<Map<Long, Integer>> basketItemsMapMono = basketItemFlux
+            .collectMap(BasketItem::getProductId, BasketItem::getQuantity);
+
+    Mono<List<Item>> itemsMono = basketItemsMapMono.flatMap(basketItemsMap ->
+            productFlux
+                    .map(product -> {
+                      Item item = new Item(product);
+                      item.setCount(basketItemsMap.getOrDefault(product.getId(), 0));
+                      return item;
+                    })
+                    .collectList()
+    );
+
+    return Mono.zip(itemsMono, totalItemsMono)
+            .doOnNext(tuple -> {
+              List<Item> items = tuple.getT1();
+              long totalItems = tuple.getT2();
+
+              model.addAttribute("items", items);
+              model.addAttribute("search", keyword);
+              model.addAttribute("sort", sort);
+
+              Paging paging = new Paging();
+              paging.setPageNumber(page);
+              paging.setPageSize(size);
+
+              int totalPages = (int) Math.ceil((double) totalItems / size);
+              paging.setNext(page < totalPages);
+              paging.setPrevious(page > 1);
+
+              model.addAttribute("paging", paging);
+              model.addAttribute("totalItems", totalItems);
+            })
+            .thenReturn("main.html");
+  }
+
+
+
+
+
+
 
   @GetMapping("/images/{id}")
   public Mono<ResponseEntity<byte[]>> getImage(@PathVariable Long id) {
@@ -108,7 +177,7 @@ public class ProductController {
   @GetMapping("/items/{id}")
   public Mono<String> getItem(@PathVariable(name="id") long id,
                         Model model ) {
-//    Mono<Item> itemMono = productService.getProductItem(id, currentBasket());
+//    Mono<Item> itemMono = productService.getProductItem(id, currentBasket())
     return productService.getProductItem(id, currentBasket())
             .doOnNext(item -> {
               model.addAttribute("item", item);
@@ -125,64 +194,52 @@ public class ProductController {
 
   @GetMapping("/cart/items")
   public Mono<String> getBasket( Model model ){
-    Flux<Item> basketItems = productService.getBasketItems( currentBasket() ) ;
+    Flux<Item> basketItems = productService.getItemsFromBasket( currentBasket() ) ;
     return basketItems
             .collectList()  // собираем Flux в Mono<List<Item>>
             .doOnNext(items -> {
+              BigDecimal total = items.stream()
+                      .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getCount())))
+                      .reduce(BigDecimal.ZERO, BigDecimal::add);
               model.addAttribute("items", items);
               model.addAttribute("empty", items.isEmpty());
+              model.addAttribute("total", total);
             })
             .thenReturn("cart.html");
   }
 
 
-  @PostMapping("/items/{id}")
+// три раза одинаковый код. костыль потому что не получается  @RequestParam(name="action")
+  @PostMapping(value = "/items/{id}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE )
   public Mono<String> addRemoveDeleteProductInProductItem( @PathVariable(name="id") long id,
-                                                     @RequestParam String action,
-                                                     Model model ) {
-    return productService.plusMinusDelete(id, currentBasket(), action)
-            .thenReturn("redirect:/items/" + id);
-  }
-
-
-
-  @PostMapping("/cart/items/{id}")
-  public Mono<String> addRemoveDeleteProductInBasket( @PathVariable(name="id") long id,
-                                                @RequestParam String action,
-                                                Model model ) {
-    return productService.plusMinusDelete( id, currentBasket(), action )
-            .thenReturn( "redirect:/cart/items" );
-  }
-
-/*
-  @PostMapping("/main/items/{id}")
-  public Mono<String> fallbackHandler(ServerWebExchange exchange) {
-    return exchange.getFormData()
-            .doOnNext(formData -> System.out.println("Raw form data: " + formData))
-            .thenReturn("redirect:/main/items");
-  }
-*/
-
-  @PostMapping(value = "/main/items/{id}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE )
-  public Mono<String> addRemoveDeleteProductInMain( @PathVariable(name="id") long id,
-// does not work !!!                                @RequestParam(name="action") String action
-                                                    ServerWebExchange exchange
-  ) {
-
+                                                      ServerWebExchange exchange  ) {
     return exchange.getFormData()
             .flatMap(formData -> {
               String action = formData.getFirst("action");
-              System.out.println("Processing action: " + action + " for item: " + id);
-
-              // Ваша бизнес-логика
+              return productService.plusMinusDelete(id, currentBasket(), action)
+                      .thenReturn("redirect:/items/" + id );
+            });
+  }
+  @PostMapping(value = "/cart/items/{id}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE )
+  public Mono<String> addRemoveDeleteProductInBasket( @PathVariable(name="id") long id,
+                                                    ServerWebExchange exchange  ) {
+    return exchange.getFormData()
+            .flatMap(formData -> {
+              String action = formData.getFirst("action");
+              return productService.plusMinusDelete(id, currentBasket(), action)
+                      .thenReturn("redirect:/cart/items");
+            });
+  }
+    @PostMapping(value = "/main/items/{id}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE )
+  public Mono<String> addRemoveDeleteProductInMain( @PathVariable(name="id") long id,
+// does not work !!!                                @RequestParam(name="action") String action
+                                                    ServerWebExchange exchange ) {
+    return exchange.getFormData()
+            .flatMap(formData -> {
+              String action = formData.getFirst("action");
               return productService.plusMinusDelete(id, currentBasket(), action)
                       .thenReturn("redirect:/main/items");
-            })
-            .onErrorResume(e -> {
-              System.err.println("Error processing action: " + e.getMessage());
-              return Mono.just("redirect:/main/items?error=processing_failed");
             });
-
   }
 
 

@@ -27,11 +27,11 @@ public interface BasketItemRepository extends ReactiveCrudRepository<BasketItem,
   @Query("""
         SELECT
             p.id as id,
+            CAST(p.id AS VARCHAR) as imgPath,
             p.name as title,
             p.price as price,
             p.description as description,
-            bi.quantity as count,
-            p.id as imgPath
+            bi.quantity as count
         FROM basket_item bi
         JOIN products p ON bi.product_id = p.id
         WHERE bi.basket_id = :basketId

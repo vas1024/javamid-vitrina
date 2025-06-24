@@ -51,7 +51,7 @@ class UserServiceTest {
 
   @Test
   public void testGetListOfProducts(){
-    productService.getProducts("", "", 1,1)
+    productService.getProducts("", "", 0,10)
             .subscribe(
                     product -> System.out.println( product.getDescription() )
                     );
@@ -59,7 +59,7 @@ class UserServiceTest {
 
   @Test
   public void testGetListOfProducts2() {
-    productService.getProducts("", "", 1, 1)
+    productService.getProducts("", "", 0, 10)
             .doOnNext(product -> System.out.println("Product: " + product.getId() +
                     "   " + product.getDescription() + "  image: " + product.getImage() ))
             .subscribe(); // важно вызвать subscribe()

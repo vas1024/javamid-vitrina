@@ -20,6 +20,29 @@ public interface ProductRepository extends ReactiveCrudRepository<Product, Long>
   Mono<ByteBuffer> findImageById(Long id);
 
 
+  @Query("""
+        SELECT COUNT(*) FROM products
+        WHERE
+            LOWER(name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+            LOWER(description) LIKE LOWER(CONCAT('%', :keyword, '%'))
+        """)
+  Mono<Long> countProducts(String keyword);
+
+  @Query("""
+    SELECT * FROM products
+    WHERE
+        (:keyword IS NULL OR
+        LOWER(name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+        LOWER(description) LIKE LOWER(CONCAT('%', :keyword, '%')))
+    ORDER BY
+        CASE WHEN :sort = 'ALPHA' THEN name END ASC,
+        CASE WHEN :sort = 'NAME_DESC' THEN name END DESC,
+        CASE WHEN :sort = 'PRICE' THEN price END ASC,
+        CASE WHEN :sort = 'PRICE_DESC' THEN price END DESC,
+        id ASC
+    LIMIT :limit OFFSET :offset
+    """)
+  Flux<Product> getProducts( String keyword, String sort, int limit, long offset  );
 
 
   /*

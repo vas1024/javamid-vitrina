@@ -77,17 +77,39 @@ public class ProductService {
     return userRepository.findById( id );
   }
 
-  public Flux<Product> getProducts( String keyword, String sort, int page, int size ) {
-    return productRepository.findAll();
+  public Flux<Product> getProducts(String keyword, String sort, int page, int size) {
+    String validSort = switch(sort) {
+      case "NO", "ALPHA", "PRICE" -> sort;
+      default -> "NO";
+    };
+    int validPage = Math.max(0, page); // Страница не может быть < 0
+    int validSize = Math.max(1, size);  // Размер не может быть < 1
+    long offset = (long) validPage  * validSize; // Автоматически будет 0 для page=1
+
+    return productRepository.getProducts(
+            keyword.isEmpty() ? null : keyword,
+            validSort,
+            validSize,
+            offset
+    );
+  }
+
+  public Mono<Long> countProducts(String keyword, String sort, int page, int size){
+    return productRepository.countProducts( keyword );
   }
 
 
   public Mono<byte[]> getImageByProductId(Long id) {
     return productImageRepository.findImageById(id)
-            .switchIfEmpty(Mono.defer(() -> {
-              return Mono.just(cachedImage);
-            }));
+            .flatMap(image -> {
+              if (image == null || image.length == 0) {
+                return Mono.justOrEmpty(cachedImage);
+              }
+              return Mono.just(image);
+            })
+            .defaultIfEmpty(cachedImage);
   }
+
 
 
   public Mono<Item> getProductItem(Long productId, Long basketId) {
@@ -116,30 +138,61 @@ public class ProductService {
   }
 
 
-  public Flux<Item> getBasketItems( Long basketId ){
-    return basketItemRepository.findBasketItemsAndProducts( basketId );
+
+  public Flux<Item> getItemsFromBasket(Long basketId) {
+    return basketItemRepository.findBasketItemsAndProducts(basketId)
+            .doOnNext(item -> {
+                    item.setImgPath(item.getId());
+                    System.out.println(
+                    "[DEBUG] Item: id=" + item.getId() +
+                            ", name=" + item.getTitle() +
+                            ", pathToImg=" + item.getImgPath() +
+                            ", quantity=" + item.getCount()
+                    );
+            });
   }
 
+  public Flux<BasketItem> getBasketItems(Long basketId){
+    return basketItemRepository.findByBasketId( basketId );
+  }
 
   public Mono<Void> plusMinusDelete(Long productId, Long basketId, String action) {
     return Mono.just(action)
             .flatMap(act -> {
               switch (act) {
                 case "plus":
+
                   return basketItemRepository.findByBasketIdAndProductId(basketId, productId)
+                          .doOnSubscribe(sub -> System.out.println("[DEBUG] Starting search for basketId=" + basketId +
+                                  ", productId=" + productId))
+                          .doOnNext(item -> System.out.println("[DEBUG] Found existing item: " + item))
                           .flatMap(basketItem -> {
                             int newQuantity = basketItem.getQuantity() + 1;
-                            return basketItemRepository.updateQuantity(basketId, productId, newQuantity);
+                            System.out.println("[DEBUG] Updating quantity from " + basketItem.getQuantity() +
+                                    " to " + newQuantity);
+
+                            return basketItemRepository.updateQuantity(basketId, productId, newQuantity)
+                                    .doOnSuccess(v -> System.out.println("[DEBUG] Update query executed successfully"))
+                                    .thenReturn(basketItem)
+                                    .doOnNext(updated -> System.out.println("[DEBUG] Returning updated item: " + updated));
                           })
                           .switchIfEmpty(
-                                Mono.defer(() -> {
-                                  BasketItem newItem = new BasketItem();
-                                  newItem.setBasketId(basketId);
-                                  newItem.setProductId(productId);
-                                  newItem.setQuantity(1);
-                                  return basketItemRepository.save(newItem).then();
-                                })
-                        );
+                                  Mono.defer(() -> {
+                                    System.out.println("[DEBUG] No existing item found, creating new one");
+                                    BasketItem newItem = new BasketItem();
+                                    newItem.setBasketId(basketId);
+                                    newItem.setProductId(productId);
+                                    newItem.setQuantity(1);
+                                    System.out.println("[DEBUG] New item to save: " + newItem);
+
+                                    return basketItemRepository.save(newItem)
+                                            .doOnSubscribe(sub -> System.out.println("[DEBUG] Starting save operation"))
+                                            .doOnSuccess(saved -> System.out.println("[DEBUG] Item saved successfully: " + saved))
+                                            .doOnError(e -> System.err.println("[ERROR] Failed to save item: " + e.getMessage()));
+                                  })
+                          )
+                          .doOnError(e -> System.err.println("[ERROR] Operation failed: " + e.getMessage()))
+                          .doOnTerminate(() -> System.out.println("[DEBUG] Operation completed"));
 
                 case "minus":
                   return basketItemRepository.findByBasketIdAndProductId(basketId, productId)
@@ -161,43 +214,7 @@ public class ProductService {
             .then();
   }
 
-  /*
-  public Mono<Item> getProductItem(Long productId, Long basketId) {
-    // Логируем входные параметры
-    System.out.println("[Service] Called getProductItem with productId=" + productId + ", basketId=" + basketId);
 
-    Mono<Product> productMono = productRepository.findById(productId)
-            .doOnNext(p -> System.out.println("[Service] Found product: " + p))
-            .doOnError(e -> System.err.println("[Service] Error finding product: " + e))
-            .doOnSubscribe(s -> System.out.println("[Service] Starting product search"));
-
-    Mono<Integer> quantityMono = basketItemRepository.getQuantity(basketId, productId)
-            .doOnNext(q -> System.out.println("[Service] Found quantity: " + q))
-            .doOnError(e -> System.err.println("[Service] Error getting quantity: " + e))
-            .doOnSubscribe(s -> System.out.println("[Service] Starting quantity search"));
-
-    Mono<Integer> quantityMonoSafe = quantityMono.defaultIfEmpty(0)
-            .doOnNext(q -> System.out.println("[Service] Quantity after default: " + q));
-
-    return Mono.zip(productMono, quantityMonoSafe)
-            .doOnSubscribe(s -> System.out.println("[Service] Starting zip operation"))
-            .doOnNext(t -> System.out.println("[Service] Zip completed with values: " + t))
-            .map(tuple -> {
-              Product product = tuple.getT1();
-              int count = tuple.getT2();
-              System.out.println("[Service] Creating Item with product=" + product + ", count=" + count);
-
-              Item item = new Item(product);
-              item.setCount(count);
-              System.out.println("[Service] Created item: " + item);
-
-              return item;
-            })
-            .doOnError(e -> System.err.println("[Service] Error in zip/map: " + e))
-            .doOnSuccess(i -> System.out.println("[Service] Successfully created item: " + i))
-            .doOnTerminate(() -> System.out.println("[Service] Processing terminated"));
-  }
-*/
 
 
 /*

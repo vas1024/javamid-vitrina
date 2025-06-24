@@ -15,12 +15,22 @@ public class Item {
   private int count;
   private String imgPath = "0";
 
+
+  public void setId( Long id ) { this.id = id; }
+  public void setTitle( String title ) { this.title = title; }
+  public void setPrice( BigDecimal price ) { this.price = price; }
+  public void setDescription( String description ) { this.description = description; }
+  public void setCount( int count ){ this.count = count; }
+//  public void setIngPath( String imgPath ) { this.imgPath = imgPath; }
+  public void setImgPath( Long id ) { this.imgPath = id.toString(); }
+
   public Long getId() { return id; }
   public String getTitle(){ return title; }
   public BigDecimal getPrice() { return price; }
   public String getDescription() { return description; }
   public int getCount(){ return count; }
   public String getImgPath(){ return imgPath; }
+
 
   public Item(){}
 
@@ -41,7 +51,6 @@ public class Item {
     this.count = orderItem.getQuantity();
     if ( orderItem.getImage() != null ) this.imgPath = orderItem.getId().toString();
   }
-  public void setCount( int count ){ this.count = count; }
-  public void setId( Long id ) { this.id = id; }
+
 
 }
