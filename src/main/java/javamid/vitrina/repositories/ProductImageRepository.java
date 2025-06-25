@@ -21,4 +21,14 @@ public class ProductImageRepository {
             })
             .one();
   }
+
+  public Mono<byte[]> findOrderItemImageById(Long id) {
+    return dbClient.sql("SELECT image FROM order_items WHERE id = :id")
+            .bind("id", id)
+            .map((row, metadata) -> {
+              ByteBuffer buffer = row.get("image", ByteBuffer.class);
+              return buffer != null ? buffer.array() : new byte[0];
+            })
+            .one();
+  }
 }

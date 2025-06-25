@@ -2,10 +2,7 @@ package javamid.vitrina.services;
 
 
 import jakarta.annotation.PostConstruct;
-import javamid.vitrina.dao.Product;
-import javamid.vitrina.dao.Basket;
-import javamid.vitrina.dao.BasketItem;
-import javamid.vitrina.dao.User;
+import javamid.vitrina.dao.*;
 import javamid.vitrina.model.Item;
 import javamid.vitrina.repositories.*;
 import org.springframework.core.io.ClassPathResource;
@@ -26,6 +23,8 @@ public class ProductService {
   private final BasketItemRepository basketItemRepository;
   private final UserRepository userRepository;
   private final ProductImageRepository productImageRepository;
+  private final OrderRepository orderRepository;
+  private final OrderItemRepository orderItemRepository;
 
   private byte[] cachedImage;
 
@@ -33,12 +32,16 @@ public class ProductService {
                         BasketRepository basketRepository,
                         BasketItemRepository basketItemRepository,
                         UserRepository userRepository,
-                        ProductImageRepository productImageRepository  ) {
+                        ProductImageRepository productImageRepository,
+                        OrderRepository orderRepository,
+                        OrderItemRepository orderItemRepository  ) {
     this.productRepository = productRepository;
     this.basketRepository = basketRepository;
     this.basketItemRepository = basketItemRepository;
     this.userRepository = userRepository;
     this.productImageRepository = productImageRepository;
+    this.orderRepository = orderRepository;
+    this.orderItemRepository = orderItemRepository;
   }
 
 
@@ -106,6 +109,18 @@ public class ProductService {
                 return Mono.justOrEmpty(cachedImage);
               }
               return Mono.just(image);
+            })
+            .defaultIfEmpty(cachedImage);
+  }
+
+
+  public Mono<byte[]> getImageByOrderItemId(Long id) {
+    return productImageRepository.findOrderItemImageById(id)
+            .flatMap(image -> {
+              if (image == null || image.length == 0) {
+                return Mono.justOrEmpty(cachedImage);
+              }
+              return Mono.just( image );
             })
             .defaultIfEmpty(cachedImage);
   }
@@ -215,6 +230,52 @@ public class ProductService {
   }
 
 
+  public Flux<Order> getOrders(Long userId ){
+    return orderRepository.findAllByUserId( userId );
+  }
+
+  public Flux<OrderItem> getOrderItems( Long orderId ){
+    return orderItemRepository.findByOrderId( orderId );
+  }
+
+
+
+  public Mono<Long> makeOrder(Long basketId) {
+    return basketRepository.findUserIdByBasketId(basketId)
+            .flatMap(userId -> basketRepository.findByUserId(userId)
+                    .flatMap(basket -> {
+                      // 1. Создаем и сохраняем заказ
+                      Order order = new Order();
+                      order.setUserId(userId);
+
+                      return orderRepository.save(order)
+                              .flatMap(savedOrder -> {
+                                // 2. Обрабатываем элементы корзины
+                                return basketItemRepository.findByBasketId(basketId)
+                                        .flatMap(basketItem -> productRepository.findById(basketItem.getProductId())
+                                                .flatMap(product -> {
+                                                  // 3. Создаем и сохраняем OrderItem
+                                                  OrderItem orderItem = new OrderItem();
+                                                  orderItem.setOrderId(savedOrder.getId());
+                                                  orderItem.setQuantity(basketItem.getQuantity());
+                                                  orderItem.setName(product.getName());
+                                                  orderItem.setImage(product.getImage());
+                                                  orderItem.setPrice(product.getPrice());
+                                                  orderItem.setProductId(product.getId());
+
+                                                  return orderItemRepository.save(orderItem);
+                                                })
+                                        )
+                                        .collectList()
+                                        .flatMap(savedOrderItems -> {
+                                          // 4. Удаляем элементы корзины и возвращаем ID заказа
+                                          return basketItemRepository.deleteByBasketId(basketId)
+                                                  .thenReturn(savedOrder.getId());
+                                        });
+                              });
+                    })
+            );
+  }
 
 
 /*

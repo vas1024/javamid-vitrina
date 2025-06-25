@@ -19,9 +19,5 @@ public interface OrderItemRepository extends ReactiveCrudRepository<OrderItem, L
   // Дополнительные полезные методы
   Flux<OrderItem> findByOrderId(Long orderId);
 
-  @Query("SELECT * FROM order_items WHERE order_id = :orderId AND product_id = :productId")
-  Mono<OrderItem> findByOrderIdAndProductId(Long orderId, Long productId);
 
-  @Query("DELETE FROM order_items WHERE order_id = :orderId")
-  Mono<Void> deleteAllByOrderId(Long orderId);
 }

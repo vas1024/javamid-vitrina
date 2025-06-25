@@ -50,4 +50,6 @@ public interface BasketItemRepository extends ReactiveCrudRepository<BasketItem,
 
   Mono<Void> deleteByBasketIdAndProductId(Long basketId, Long productId);
 
+  Mono<Void> deleteAllByBasketId(Long basketId);
+
 }

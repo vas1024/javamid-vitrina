@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.data.util.Pair;
+import java.net.URI;
 
 
 
@@ -39,75 +40,19 @@ import reactor.core.publisher.Mono;
 public class ProductController {
 
   private final ProductService productService;
-
   public ProductController(ProductService productService) {
     this.productService = productService;
   }
 
   public Long currentBasket() { return 1L; }
+  public Long currentUser() { return 1L; }
+  record OrderModel(Long id, BigDecimal totalSum, List<Item> items) {}
 
   @GetMapping("/")
   public Mono<String> homePage() {
     return Mono.just("redirect:/main/items");
   }
 
-
-  /*
-
-  @GetMapping("/main/items")
-  public Mono<String> getItems(
-          @RequestParam(name = "search", required = false, defaultValue = "") String keyword,
-          @RequestParam(name = "sort", defaultValue = "NO") String sort,
-          @RequestParam(name = "pageSize", defaultValue = "10") int size,
-          @RequestParam(name = "pageNumber", defaultValue = "1") int page,
-          Model model) {
-
-
-    Flux<Product> productFlux = productService.getProducts(keyword, sort, page - 1, size);
-    Flux<BasketItem> basketItemFlux = productService.getBasketItems( currentBasket() );
-
-
-// Сначала собираем корзину в Map для быстрого поиска
-    Mono<Map<Long, Integer>> basketItemsMapMono = basketItemFlux
-            .collectMap(BasketItem::getProductId, BasketItem::getQuantity);
-
-// Затем обрабатываем продукты с учетом данных из корзины
-    Mono<List<Item>> itemsMono = basketItemsMapMono.flatMap(basketItemsMap ->
-            productFlux
-                    .map(product -> {
-                      Item item = new Item(product);
-                      // Устанавливаем количество из корзины или 0, если продукта нет в корзине
-                      item.setCount(basketItemsMap.getOrDefault(product.getId(), 0));
-                      return item;
-                    })
-                    .collectList()
-    );
-
-
-    // Фиксированные значения пагинации
-    int pageNumber = 1;
-    int pageSize = 10;
-
-    //  Заполняем модель и возвращаем шаблон
-    return itemsMono
-            .doOnNext(itemList -> {
-              model.addAttribute("items", itemList);
-              model.addAttribute("search", keyword);
-              model.addAttribute("sort", sort);
-
-              // Фиктивная пагинация (всегда page=1, size=1)
-              Paging paging = new Paging();
-              paging.setPageNumber(pageNumber);
-              paging.setPageSize(pageSize);
-              paging.setNext(false); // Нет следующей страницы
-              paging.setPrevious(false); // Нет предыдущей страницы
-
-              model.addAttribute("paging", paging);
-            })
-            .thenReturn("main.html");
-  }
-
-  */
 
 
   @GetMapping("/main/items")
@@ -167,6 +112,15 @@ public class ProductController {
   @GetMapping("/images/{id}")
   public Mono<ResponseEntity<byte[]>> getImage(@PathVariable Long id) {
     return productService.getImageByProductId(id)
+            .map(imageData -> ResponseEntity.ok()
+                    .contentType(MediaType.IMAGE_JPEG)
+                    .header(HttpHeaders.CACHE_CONTROL, "no-transform")
+                    .body(imageData));
+  }
+
+  @GetMapping("/orderimages/{id}")
+  public Mono<ResponseEntity<byte[]>> getOrderImage(@PathVariable Long id) {
+    return productService.getImageByOrderItemId(id)
             .map(imageData -> ResponseEntity.ok()
                     .contentType(MediaType.IMAGE_JPEG)
                     .header(HttpHeaders.CACHE_CONTROL, "no-transform")
@@ -241,6 +195,104 @@ public class ProductController {
                       .thenReturn("redirect:/main/items");
             });
   }
+
+
+
+
+  @GetMapping("/orders")
+  public Mono<String> getOrders(Model model) {
+    return productService.getOrders(currentUser())
+            .flatMap(order -> {
+              return productService.getOrderItems(order.getId())
+                      .map(orderItem -> new Item(orderItem))
+                      .collectList()
+                      .flatMap(items -> {
+                        return productService.getOrderItems(order.getId()) // Повторный запрос, но теперь для суммы
+                                .map(oi -> oi.getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
+                                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                                .map(totalSum -> new OrderModel(order.getId(), totalSum, items));
+                      });
+            })
+            .collectList()
+            .doOnNext(orderModelList -> {
+              model.addAttribute("orders", orderModelList);
+
+              orderModelList.forEach(orderModel -> {
+                System.out.println(orderModel.id());
+                orderModel.items().forEach(item ->
+                        System.out.println("- " + item.getId() + " " + item.getTitle()));
+              });
+            })
+            .thenReturn("orders.html");
+  }
+
+
+  @PostMapping("/buy")
+  public Mono<Void> postBuy(ServerWebExchange exchange) {
+    return productService.makeOrder( currentBasket() )
+            .flatMap(orderId -> {
+              System.out.println("Buy id: " + orderId);
+
+              // 1. Добавляем ID в путь (аналог addAttribute)
+              String redirectUrl = "/orders/" + orderId;
+
+              // 2. Добавляем flash-атрибут (аналог addFlashAttribute)
+              exchange.getAttributes().put("newOrder", true);
+
+              // 3. Делаем редирект
+              return Mono.fromRunnable(() -> {
+                exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
+                exchange.getResponse().getHeaders().setLocation(URI.create(redirectUrl));
+              });
+            });
+  }
+
+
+
+
+
+  @GetMapping("/orders/{id}")
+  public Mono<String> getOrder(
+          @PathVariable("id") Long orderId,
+          @RequestParam(name = "newOrder", required = false, defaultValue = "false") Boolean newOrder,
+          Model model) {
+
+    return productService.getOrderItems(orderId)
+            .collectList()
+            .flatMap(orderItems -> {
+              // Параллельно преобразуем в Items и считаем сумму
+              Mono<List<Item>> itemsMono = Flux.fromIterable(orderItems)
+                      .map(orderItem -> {
+                        Item item = new Item(orderItem);
+                        item.setId(orderItem.getProductId());
+                        return item;
+                      })
+                      .collectList();
+
+              Mono<BigDecimal> totalMono = Mono.just(
+                      orderItems.stream()
+                              .map(oi -> oi.getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
+                              .reduce(BigDecimal.ZERO, BigDecimal::add)
+              );
+
+              return Mono.zip(itemsMono, totalMono);
+            })
+            .map(tuple -> {
+              List<Item> items = tuple.getT1();
+              BigDecimal totalSum = tuple.getT2();
+
+              record OrderModel(Long id, BigDecimal totalSum, List<Item> items) {}
+              return new OrderModel(orderId, totalSum, items);
+            })
+            .doOnNext(orderModel -> {
+              model.addAttribute("order", orderModel);
+              if (newOrder) {
+                model.addAttribute("newOrder", true);
+              }
+            })
+            .thenReturn("order.html");
+  }
+
 
 
 

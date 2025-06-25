@@ -44,6 +44,8 @@ public interface ProductRepository extends ReactiveCrudRepository<Product, Long>
     """)
   Flux<Product> getProducts( String keyword, String sort, int limit, long offset  );
 
+  Mono<Product> findProductById( Long productId );
+
 
   /*
 
