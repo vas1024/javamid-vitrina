@@ -1,0 +1,85 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  version: 1.0.0
+  description: API для платежей и баланса
+
+paths:
+  /payment:
+    post:
+      tags: [payment]
+      summary: Создать платеж
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Платеж создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: Неверные данные
+
+  /payment/balance/{userId}:
+    get:
+      tags: [balance]
+      summary: Получить баланс пользователя
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balance'
+
+components:
+  schemas:
+    PaymentRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: "123"
+        orderSignature:
+          type: string
+          example: "2:3,4:1,5:3"
+      required: [userId, orderSignature]
+
+    PaymentResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [CREATED, SUCCESS, FAILED]
+          example: "SUCCESS"
+        paymentId:
+          type: string
+          example: "789"
+        dateTime:
+          type: string
+          format: date-time
+          example: "2025-07-10T14:30:00Z"
+      required: [status, paymentId, dateTime]
+
+    Balance:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: "123"
+        amount:
+          type: number
+          format: double
+          example: 5000.00
+      required: [userId, amount]

@@ -13,7 +13,10 @@ import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
+import java.util.AbstractMap;
+
 
 @Service
 public class ProductService {
@@ -27,6 +30,7 @@ public class ProductService {
   private final OrderItemRepository orderItemRepository;
 
   private byte[] cachedImage;
+
 
   public ProductService(ProductRepository productRepository,
                         BasketRepository basketRepository,
@@ -263,11 +267,32 @@ public class ProductService {
                                                   orderItem.setPrice(product.getPrice());
                                                   orderItem.setProductId(product.getId());
 
-                                                  return orderItemRepository.save(orderItem);
+                                                  return orderItemRepository.save(orderItem)
+
+
+                                                          .thenReturn( basketItem.getProductId()
+                                                                  + ":"
+                                                                  + basketItem.getQuantity()
+                                                          );
+
+
                                                 })
                                         )
                                         .collectList()
-                                        .flatMap(savedOrderItems -> {
+
+                                        .doOnNext(list -> {
+                                          System.out.println("Debug: Собранные productId:quantity -> " + list);
+                                        })
+
+                                        .flatMap(orderItemHashes -> {
+                                            // 1. Сортируем, чтобы порядок не влиял на хеш
+                                            Collections.sort(orderItemHashes);
+                                            // 2. Объединяем в одну строку через запятую (или другой разделитель)
+                                            String fullOrderHashInput = String.join(",", orderItemHashes);
+                                            // 4. Логируем для отладки
+                                            System.out.println("Debug: Полная строка для хеша заказа: " + fullOrderHashInput);
+
+
                                           // 4. Удаляем элементы корзины и возвращаем ID заказа
                                           return basketItemRepository.deleteByBasketId(basketId)
                                                   .thenReturn(savedOrder.getId());
