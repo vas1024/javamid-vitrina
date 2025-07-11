@@ -1,8 +1,7 @@
 package javamid.vitrina;
 
-import javamid.vitrina.dao.User;
-import javamid.vitrina.services.ProductService;
-import org.assertj.core.api.Assertions;
+import javamid.vitrina.app.dao.User;
+import javamid.vitrina.app.services.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.junit.jupiter.api.Test;

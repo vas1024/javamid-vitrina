@@ -1,6 +1,6 @@
 package javamid.vitrina;
 
-import javamid.vitrina.dao.Product;
+import javamid.vitrina.app.dao.Product;
 import org.springframework.data.domain.Page;
 
 public class testUtils {
