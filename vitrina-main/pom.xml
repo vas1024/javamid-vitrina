@@ -79,6 +79,14 @@
 			<version>5.7.1</version>
 		</dependency>
 
+
+		<dependency>
+			<groupId>org.openapitools</groupId>
+			<artifactId>jackson-databind-nullable</artifactId>
+			<version>0.2.6</version>
+		</dependency>
+
+
 	</dependencies>
 
 	<build>
@@ -87,6 +95,38 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+
+
+			<plugin>
+				<groupId>org.openapitools</groupId>
+				<artifactId>openapi-generator-maven-plugin</artifactId>
+				<version>7.12.0</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>generate</goal>
+						</goals>
+						<configuration>
+							<inputSpec>http://localhost:8081/v3/api-docs</inputSpec>
+							<generatorName>java</generatorName>
+							<configOptions>
+								<interfaceOnly>false</interfaceOnly>
+								<reactive>true</reactive>
+								<returnMono>true</returnMono>
+								<library>webclient</library>
+								<useTags>true</useTags>
+								<useJakartaEe>true</useJakartaEe>
+								<generateAuthMethods>false</generateAuthMethods>
+								<useAuthMethod>none</useAuthMethod>
+								<openApiNullable>false</openApiNullable>
+							</configOptions>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+
+
 		</plugins>
 	</build>
 
