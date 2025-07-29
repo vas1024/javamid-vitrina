@@ -5,6 +5,7 @@ import javamid.vitrina.app.dao.BasketItem;
 import javamid.vitrina.app.model.Item;
 import javamid.vitrina.app.model.Paging;
 import javamid.vitrina.app.dao.Product;
+import javamid.vitrina.app.services.PaymentService;
 import javamid.vitrina.app.services.ProductService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -18,19 +19,24 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.net.URI;
 
 
 import org.springframework.web.bind.annotation.GetMapping;
+import reactor.util.retry.Retry;
 
 @Controller
 public class ProductController {
 
   private final ProductService productService;
-  public ProductController(ProductService productService) {
+  private final PaymentService paymentService;
+  public ProductController(ProductService productService,
+                           PaymentService paymentService  ) {
     this.productService = productService;
+    this.paymentService = paymentService;
   }
 
   public Long currentBasket() { return 1L; }
@@ -137,7 +143,19 @@ public class ProductController {
 
   @GetMapping("/cart/items")
   public Mono<String> getBasket( Model model ){
+
+
+    Mono<Long> userIdMono = productService.findUserIdByBasketId( currentBasket() );
+/*
+    userIdMono.flatMap(userId -> paymentService.getUserBalance(userId))
+            .doOnNext(balance -> System.out.println("Текущий баланс: " + balance))
+            .subscribe();
+ */
+    
+    Mono<BigDecimal> balanceMono = userIdMono.flatMap( userId->paymentService.getUserBalance(userId));
+
     Flux<Item> basketItems = productService.getItemsFromBasket( currentBasket() ) ;
+
     return basketItems
             .collectList()  // собираем Flux в Mono<List<Item>>
             .doOnNext(items -> {
@@ -215,9 +233,10 @@ public class ProductController {
             .thenReturn("orders.html");
   }
 
-
+/*
   @PostMapping("/buy")
   public Mono<Void> postBuy(ServerWebExchange exchange) {
+
     return productService.makeOrder( currentBasket() )
             .flatMap(orderId -> {
               System.out.println("Buy id: " + orderId);
@@ -235,6 +254,72 @@ public class ProductController {
               });
             });
   }
+
+*/
+
+
+  @PostMapping("/buy")
+  public Mono<Void> postBuy(ServerWebExchange exchange) {
+
+    Mono<Long> userIdMono = productService.findUserIdByBasketId( currentBasket() );
+
+    Mono<BigDecimal> balanceMono =  userIdMono
+            .flatMap(userId->paymentService.getUserBalance(userId));
+
+    Flux<Item> basketItems = productService.getItemsFromBasket( currentBasket() ) ;
+
+    Mono<BigDecimal> totalMono = basketItems
+            .collectList()  // собираем Flux в Mono<List<Item>>
+            .map(items -> items.stream()
+                    .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getCount())))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+            );
+
+
+    return Mono.zip(balanceMono, totalMono, userIdMono)
+            .flatMap(tuple -> {
+              BigDecimal balance = tuple.getT1();
+              System.out.println("ProductController: balance = " + balance );
+              BigDecimal total = tuple.getT2();
+              Long userId = tuple.getT3();
+
+              if (balance.compareTo(new BigDecimal("-1")) == 0) {
+                System.out.println("ProductController: payment service unavailable" );
+                exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
+                exchange.getResponse().getHeaders().setLocation(
+                        URI.create("/cart/items?error=service_unavailable")
+                );
+                return Mono.empty();
+              }
+
+              if (balance.compareTo(total) < 0 && balance.compareTo(new BigDecimal("-1")) != 0 ) {
+                // Редирект на /cart/items с флагом ошибки
+                exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
+                exchange.getResponse().getHeaders().setLocation(
+                        URI.create("/cart/items?error=insufficient_funds")
+                );
+                exchange.getAttributes().put("error", "Недостаточно средств");
+                return Mono.empty();
+              }
+
+              // Если баланс OK - создаем заказ
+              return productService.makeOrder(currentBasket())
+                      .flatMap(orderId -> {
+                        exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
+                        exchange.getResponse().getHeaders().setLocation(
+                                URI.create("/orders/" + orderId)
+                        );
+                        return Mono.empty();
+                      });
+            });
+
+
+
+  }
+
+
+
+
 
 
 

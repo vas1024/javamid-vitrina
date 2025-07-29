@@ -241,6 +241,10 @@ public class ProductService {
   }
 
 
+  public Mono<Long> findUserIdByBasketId(Long basketId) {
+    return basketRepository.findUserIdByBasketId(basketId);
+  }
+
 
   public Mono<Long> makeOrder(Long basketId) {
     return basketRepository.findUserIdByBasketId(basketId)

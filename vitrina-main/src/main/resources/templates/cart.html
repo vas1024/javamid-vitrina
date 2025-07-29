@@ -5,9 +5,45 @@
     <title>Корзина товаров</title>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <!--
+    <script th:inline="javascript">
+        // Удаляем параметр error из URL после загрузки страницы
+        window.addEventListener('load', function() {
+            if (window.location.search.includes('error=')) {
+                const url = new URL(window.location);
+                url.searchParams.delete('error');
+                window.history.replaceState({}, '', url);
+            }
+        });
+    </script>
+    /!-->
 </head>
 
 <body>
+
+<!-- Добавленный блок для отображения ошибки -->
+<div th:if="${param.error != null and not param.error.isEmpty()}" style="
+    background-color: #ffebee;
+    color: #d32f2f;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    border: 1px solid #ef9a9a;
+    text-align: center;
+">
+    <span th:if="${param.error[0] == 'insufficient_funds'}"
+          th:text="#{error.insufficient_funds}">
+        Недостаточно средств
+    </span>
+
+    <span th:if="${param.error[0] == 'service_unavailable'}"
+          th:text="#{error.service_unavailable}">
+        Сервис временно недоступен
+    </span>
+</div>
+
+
+
 <a href="/orders" style="float:right;">
     <b>ЗАКАЗЫ &cudarrr;</b>
 </a>
