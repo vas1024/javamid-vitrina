@@ -305,6 +305,18 @@ public class ProductService {
   }
 
 
+  public Mono<String> getBasketSignature(Long basketId){
+    return basketItemRepository.findByBasketId(basketId)
+            .map(basketItem -> basketItem.getProductId() + ":" + basketItem.getQuantity())
+            .collectList()
+            .flatMap(orderItemHashes -> {
+              Collections.sort(orderItemHashes);
+              String fullOrderHashInput = String.join(",", orderItemHashes);
+              System.out.println("Debug: Полная строка для хеша заказа: " + fullOrderHashInput);
+              return Mono.just(fullOrderHashInput);
+            });
+  }
+
 
 }
 

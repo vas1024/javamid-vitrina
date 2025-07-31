@@ -34,13 +34,6 @@ public class PaymentService {
     return paymentApi.paymentPost(request);
   }
 
-/*
-  public Mono<BigDecimal> getUserBalance(Long userId) {
-    return balanceApi.paymentBalanceUserIdGet(userId.toString())
-            .map(balance -> BigDecimal.valueOf(balance.getAmount()))
-            .onErrorResume(e -> Mono.just(BigDecimal.ZERO) );
-  }
-*/
 
   public Mono<BigDecimal> getUserBalance(Long userId) {
     return balanceApi.paymentBalanceUserIdGet(userId.toString())
@@ -52,6 +45,30 @@ public class PaymentService {
               return Mono.just(new BigDecimal("-1"));
             })
             .defaultIfEmpty(new BigDecimal("-1"));
+  }
+
+
+
+
+
+
+  public Mono<Boolean> makePayment(Long userId, BigDecimal amount, String orderSignature) {
+
+    return getUserBalance(userId)
+            .flatMap(balance -> {
+              if (balance.compareTo(amount) < 0) {
+                return Mono.just(false); // Недостаточно средств
+              }
+
+              PaymentRequest request = new PaymentRequest()
+                      .userId(userId.toString())
+                      .orderSignature(orderSignature)
+                      .amount(amount.doubleValue());
+
+              return paymentApi.paymentPost(request)
+                      .map(response -> response.getStatus() == PaymentResponse.StatusEnum.SUCCESS)
+                      .onErrorReturn(false);
+            });
   }
 
 

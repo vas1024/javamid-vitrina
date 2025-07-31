@@ -141,32 +141,35 @@ public class ProductController {
 
   }
 
+
+
+
   @GetMapping("/cart/items")
   public Mono<String> getBasket( Model model ){
-
-
     Mono<Long> userIdMono = productService.findUserIdByBasketId( currentBasket() );
-/*
-    userIdMono.flatMap(userId -> paymentService.getUserBalance(userId))
-            .doOnNext(balance -> System.out.println("Текущий баланс: " + balance))
-            .subscribe();
- */
-    
     Mono<BigDecimal> balanceMono = userIdMono.flatMap( userId->paymentService.getUserBalance(userId));
-
     Flux<Item> basketItems = productService.getItemsFromBasket( currentBasket() ) ;
 
     return basketItems
-            .collectList()  // собираем Flux в Mono<List<Item>>
-            .doOnNext(items -> {
+            .collectList()
+            .flatMap(items -> {
               BigDecimal total = items.stream()
                       .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getCount())))
                       .reduce(BigDecimal.ZERO, BigDecimal::add);
               model.addAttribute("items", items);
               model.addAttribute("empty", items.isEmpty());
               model.addAttribute("total", total);
-            })
-            .thenReturn("cart.html");
+
+
+              return balanceMono.flatMap(balance -> {
+                if (balance.compareTo(new BigDecimal("-1")) == 0) {
+                  System.out.println("ProductController:getBasket: payment service -1");
+                  model.addAttribute("error", "service_unavailable");
+                }
+                return Mono.just("cart");
+              });
+
+            });
   }
 
 
@@ -191,7 +194,9 @@ public class ProductController {
                       .thenReturn("redirect:/cart/items");
             });
   }
-    @PostMapping(value = "/main/items/{id}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE )
+
+
+  @PostMapping(value = "/main/items/{id}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE )
   public Mono<String> addRemoveDeleteProductInMain( @PathVariable(name="id") long id,
 // does not work !!!                                @RequestParam(name="action") String action
                                                     ServerWebExchange exchange ) {
@@ -233,40 +238,14 @@ public class ProductController {
             .thenReturn("orders.html");
   }
 
-/*
-  @PostMapping("/buy")
-  public Mono<Void> postBuy(ServerWebExchange exchange) {
-
-    return productService.makeOrder( currentBasket() )
-            .flatMap(orderId -> {
-              System.out.println("Buy id: " + orderId);
-
-              // 1. Добавляем ID в путь (аналог addAttribute)
-              String redirectUrl = "/orders/" + orderId;
-
-              // 2. Добавляем flash-атрибут (аналог addFlashAttribute)
-              exchange.getAttributes().put("newOrder", true);
-
-              // 3. Делаем редирект
-              return Mono.fromRunnable(() -> {
-                exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
-                exchange.getResponse().getHeaders().setLocation(URI.create(redirectUrl));
-              });
-            });
-  }
-
-*/
-
 
   @PostMapping("/buy")
   public Mono<Void> postBuy(ServerWebExchange exchange) {
 
-    Mono<Long> userIdMono = productService.findUserIdByBasketId( currentBasket() );
-
-    Mono<BigDecimal> balanceMono =  userIdMono
-            .flatMap(userId->paymentService.getUserBalance(userId));
-
-    Flux<Item> basketItems = productService.getItemsFromBasket( currentBasket() ) ;
+    Mono<Long> userIdMono = productService.findUserIdByBasketId(currentBasket());
+    Mono<BigDecimal> balanceMono = userIdMono.flatMap(userId -> paymentService.getUserBalance(userId))
+            .doOnNext(balance -> System.out.println("ProductController:postBuy: balance before payment: " + balance));
+    Flux<Item> basketItems = productService.getItemsFromBasket(currentBasket());
 
     Mono<BigDecimal> totalMono = basketItems
             .collectList()  // собираем Flux в Mono<List<Item>>
@@ -275,16 +254,19 @@ public class ProductController {
                     .reduce(BigDecimal.ZERO, BigDecimal::add)
             );
 
+    Mono<String> orderSignatureMono = productService.getBasketSignature(currentBasket());
+
+
 
     return Mono.zip(balanceMono, totalMono, userIdMono)
             .flatMap(tuple -> {
               BigDecimal balance = tuple.getT1();
-              System.out.println("ProductController: balance = " + balance );
+              System.out.println("ProductController: balance = " + balance);
               BigDecimal total = tuple.getT2();
               Long userId = tuple.getT3();
 
               if (balance.compareTo(new BigDecimal("-1")) == 0) {
-                System.out.println("ProductController: payment service unavailable" );
+                System.out.println("ProductController: payment service unavailable");
                 exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
                 exchange.getResponse().getHeaders().setLocation(
                         URI.create("/cart/items?error=service_unavailable")
@@ -292,7 +274,7 @@ public class ProductController {
                 return Mono.empty();
               }
 
-              if (balance.compareTo(total) < 0 && balance.compareTo(new BigDecimal("-1")) != 0 ) {
+              if (balance.compareTo(total) < 0 && balance.compareTo(new BigDecimal("-1")) != 0) {
                 // Редирект на /cart/items с флагом ошибки
                 exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
                 exchange.getResponse().getHeaders().setLocation(
@@ -302,17 +284,30 @@ public class ProductController {
                 return Mono.empty();
               }
 
-              // Если баланс OK - создаем заказ
-              return productService.makeOrder(currentBasket())
-                      .flatMap(orderId -> {
-                        exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
-                        exchange.getResponse().getHeaders().setLocation(
-                                URI.create("/orders/" + orderId)
-                        );
-                        return Mono.empty();
-                      });
-            });
+              return Mono.zip(userIdMono, totalMono, orderSignatureMono)
+                      .flatMap(tuple2 -> {
+                        Long userId2 = tuple2.getT1();
+                        BigDecimal amount = tuple2.getT2();
+                        String signature = tuple2.getT3();
+                        return paymentService.makePayment(userId2, amount, signature);
+                      })
+                      .flatMap(paymentSuccess -> {
+                                if (paymentSuccess) {
+                                  return productService.makeOrder(currentBasket())
+                                          .flatMap(orderId -> {
+                                            exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
+                                            exchange.getResponse().getHeaders().setLocation(
+                                                    URI.create("/orders/" + orderId)
+                                            );
+                                            return Mono.empty();
+                                          });
+                                }
+                                return Mono.empty();
+                              }
+                      );
 
+
+            });
 
 
   }
