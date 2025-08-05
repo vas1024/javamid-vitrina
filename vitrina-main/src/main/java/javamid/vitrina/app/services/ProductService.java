@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -167,8 +168,6 @@ public class ProductService {
 
 
 
-
-
   /*
   public Flux<Product> getProducts(String keyword, String sort, int page, int size) {
     String validSort = switch(sort) {
@@ -199,43 +198,36 @@ public class ProductService {
 
 
 
-
   public Mono<byte[]> getImageByProductId(Long id) {
     String cacheKey = "product:image:" + id;
 
     return imageRedisTemplate.opsForValue().get(cacheKey)
-            .doOnNext(cached -> System.out.println("Из кеша: " + cacheKey))
-            .switchIfEmpty(
+            .doOnNext(cached -> System.out.println("картинка для product id " + id + " получена из кеша:   " + cacheKey))
+            .flatMap(cached ->
+                    (cached == null || cached.length == 0)
+                            ? Mono.just(cachedImage)
+                            : Mono.just(cached)
+            )
+            // без Mono.defer(  происходит лишнее обращение к БД, так показал тест
+            .switchIfEmpty(Mono.defer(() ->
                     productImageRepository.findImageById(id)
-                            .flatMap(image -> {
-                              // Определяем, что будем сохранять в кеш
-                              byte[] imageToCache = (image == null || image.length == 0)
-                                      ? cachedImage
-                                      : image;
-
-                              // Сохраняем в кеш в любом случае (даже если изображение пустое)
-                              return imageRedisTemplate.opsForValue()
-                                      .set(cacheKey, imageToCache, Duration.ofHours(1))
-                                      .doOnNext(success -> {
-                                        if (success) {
-                                          System.out.println("Сохранено в кеш: " + cacheKey);
-                                        }
-                                      })
-                                      .thenReturn(imageToCache);
-                            })
+                            .doOnNext(img -> System.out.println("картинка для product id " + id + " получена из БД, длина: " + (img != null ? img.length : "null")))
+                            .flatMap(dbImage ->
+                                    imageRedisTemplate.opsForValue()
+                                            .set(cacheKey, dbImage, Duration.ofHours(1))
+                                            .thenReturn(dbImage)
+                            )
+                            .map(dbImage ->
+                                    (dbImage == null || dbImage.length == 0)
+                                            ? cachedImage
+                                            : dbImage
+                            )
                             .defaultIfEmpty(cachedImage)
-                            .doOnNext(result -> {
-                              if (result == cachedImage) {
-                                System.out.println("Используем дефолтное изображение для: " + cacheKey);
-                              } else {
-                                System.out.println("Из БД: " + cacheKey);
-                              }
-                            })
-            );
+            ));
+
   }
 
 
-  
 
 
 
