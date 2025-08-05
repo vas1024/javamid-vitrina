@@ -1,17 +1,21 @@
 package javamid.vitrina.app.services;
 
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import javamid.vitrina.app.dao.*;
 import javamid.vitrina.app.model.Item;
 import javamid.vitrina.app.repositories.*;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 
@@ -29,6 +33,11 @@ public class ProductService {
 
   private byte[] cachedImage;
 
+  //@Qualifier("customReactiveRedisTemplate")
+  private final ReactiveRedisTemplate<String, List<Product>> productListRedisTemplate;
+  private final ReactiveRedisTemplate<String, byte[]> imageRedisTemplate;
+
+
 
   public ProductService(ProductRepository productRepository,
                         BasketRepository basketRepository,
@@ -36,7 +45,10 @@ public class ProductService {
                         UserRepository userRepository,
                         ProductImageRepository productImageRepository,
                         OrderRepository orderRepository,
-                        OrderItemRepository orderItemRepository  ) {
+                        OrderItemRepository orderItemRepository,
+                        ReactiveRedisTemplate<String, List<Product>> productListRedisTemplate,
+                        ReactiveRedisTemplate<String, byte[]> imageRedisTemplate
+                        ) {
     this.productRepository = productRepository;
     this.basketRepository = basketRepository;
     this.basketItemRepository = basketItemRepository;
@@ -44,6 +56,8 @@ public class ProductService {
     this.productImageRepository = productImageRepository;
     this.orderRepository = orderRepository;
     this.orderItemRepository = orderItemRepository;
+    this.productListRedisTemplate = productListRedisTemplate;
+    this.imageRedisTemplate = imageRedisTemplate;
   }
 
 
@@ -55,9 +69,7 @@ public class ProductService {
   }
 
 
-  /**
-   * Сохраняет список продуктов (реактивная версия)
-   */
+
   public Flux<Product> saveProducts(List<Product> products) {
     System.out.println("hello from productService.saveAll");
           return Flux.fromIterable(products)
@@ -82,6 +94,82 @@ public class ProductService {
     return userRepository.findById( id );
   }
 
+
+
+
+
+
+
+
+
+  public Flux<Product> getProducts(String keyword, String sort, int page, int size) {
+    String validSort = switch(sort) {
+      case "NO", "ALPHA", "PRICE" -> sort;
+      default -> "NO";
+    };
+    int validPage = Math.max(0, page);
+    int validSize = Math.max(1, size);
+    long offset = (long) validPage * validSize;
+
+    String cacheKey = String.format("products:%s:%s:%d:%d",
+            keyword, validSort, validPage, validSize);
+
+    System.out.println("=== Поиск продуктов ===");
+    System.out.println("Ключ кеша: " + cacheKey);
+
+    // Создаем поток для проверки кеша
+    Mono<List<Product>> cacheMono = productListRedisTemplate.opsForValue().get(cacheKey)
+            .doOnNext(cached -> System.out.println("Данные из Redis: " + (cached != null ? "найдены" : "отсутствуют")))
+            .flatMap(cached -> {
+              if (cached instanceof List) {
+                try {
+                  @SuppressWarnings("unchecked")
+                  List<Product> products = (List<Product>) cached;
+                  System.out.println("✅ Из кеша получено: " + products.size() + " продуктов");
+                  return Mono.just(products);
+                } catch (ClassCastException e) {
+                  System.err.println("⚠️ Ошибка приведения типа кеша");
+                  return Mono.empty();
+                }
+              }
+              return Mono.empty();
+            });
+
+    // Создаем поток для запроса к БД
+    Mono<List<Product>> dbMono = productRepository.getProducts(
+                    keyword.isEmpty() ? null : keyword,
+                    validSort,
+                    validSize,
+                    offset
+            )
+            .collectList()
+            .doOnNext(products -> System.out.println("Из БД получено: " + products.size() + " продуктов"))
+            .flatMap(products -> {
+              if (!products.isEmpty()) {
+                return productListRedisTemplate.opsForValue()
+                        .set(cacheKey, products, Duration.ofMinutes(10))
+                        .doOnSuccess(b -> System.out.println("✅ Кеш обновлен (TTL: 10 мин)"))
+                        .thenReturn(products);
+              }
+              return Mono.just(products);
+            });
+
+    // Комбинируем потоки: сначала проверяем кеш, если нет - идем в БД
+    return cacheMono
+            .switchIfEmpty(dbMono)
+            .flatMapMany(Flux::fromIterable)
+            .doOnComplete(() -> System.out.println("=== Завершено ==="));
+  }
+
+
+
+
+
+
+
+
+
+  /*
   public Flux<Product> getProducts(String keyword, String sort, int page, int size) {
     String validSort = switch(sort) {
       case "NO", "ALPHA", "PRICE" -> sort;
@@ -99,11 +187,59 @@ public class ProductService {
     );
   }
 
+   */
+
+
+
   public Mono<Long> countProducts(String keyword, String sort, int page, int size){
     return productRepository.countProducts( keyword );
   }
 
 
+
+
+
+
+  public Mono<byte[]> getImageByProductId(Long id) {
+    String cacheKey = "product:image:" + id;
+
+    return imageRedisTemplate.opsForValue().get(cacheKey)
+            .doOnNext(cached -> System.out.println("Из кеша: " + cacheKey))
+            .switchIfEmpty(
+                    productImageRepository.findImageById(id)
+                            .flatMap(image -> {
+                              // Определяем, что будем сохранять в кеш
+                              byte[] imageToCache = (image == null || image.length == 0)
+                                      ? cachedImage
+                                      : image;
+
+                              // Сохраняем в кеш в любом случае (даже если изображение пустое)
+                              return imageRedisTemplate.opsForValue()
+                                      .set(cacheKey, imageToCache, Duration.ofHours(1))
+                                      .doOnNext(success -> {
+                                        if (success) {
+                                          System.out.println("Сохранено в кеш: " + cacheKey);
+                                        }
+                                      })
+                                      .thenReturn(imageToCache);
+                            })
+                            .defaultIfEmpty(cachedImage)
+                            .doOnNext(result -> {
+                              if (result == cachedImage) {
+                                System.out.println("Используем дефолтное изображение для: " + cacheKey);
+                              } else {
+                                System.out.println("Из БД: " + cacheKey);
+                              }
+                            })
+            );
+  }
+
+
+  
+
+
+
+/*
   public Mono<byte[]> getImageByProductId(Long id) {
     return productImageRepository.findImageById(id)
             .flatMap(image -> {
@@ -114,6 +250,9 @@ public class ProductService {
             })
             .defaultIfEmpty(cachedImage);
   }
+ */
+
+
 
 
   public Mono<byte[]> getImageByOrderItemId(Long id) {
