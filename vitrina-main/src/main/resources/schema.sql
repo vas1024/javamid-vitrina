@@ -79,9 +79,9 @@ ALTER TABLE users ADD CONSTRAINT fk_user_basket
 
 
 -- create one user and basket
-MERGE INTO baskets KEY (id) VALUES (1, NULL);
-MERGE INTO users KEY (id) VALUES (1, 'Иван Иванович',
-'admin', '$2a$12$lp1ww8wYJZDhLRvf5/cqu.nx85d8lhpIA577O9pTVk8Qhs4s4QSgC', 1); -- password: admin123
-UPDATE baskets SET user_id = 1 WHERE id = 1;
+--MERGE INTO baskets KEY (id) VALUES (1, NULL);
+--MERGE INTO users KEY (id) VALUES (1, 'Иван Иванович',
+--'admin', '$2a$12$lp1ww8wYJZDhLRvf5/cqu.nx85d8lhpIA577O9pTVk8Qhs4s4QSgC', 1); -- password: admin123
+--UPDATE baskets SET user_id = 1 WHERE id = 1;
 
 

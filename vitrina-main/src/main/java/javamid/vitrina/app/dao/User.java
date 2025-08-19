@@ -24,7 +24,7 @@ public class User implements UserDetails  {
   private Long basketId;
 
   public User () {}
-  public User ( Long id, String name, String login, String password ) {
+  public User (  String name, String login, String password ) {
     this.id = id;
     this.name = name;
     this.login = login;

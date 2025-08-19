@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 
 <head>
     <title>Витрина товаров</title>
@@ -7,12 +9,41 @@
 </head>
 
 <body>
+<!--
     <a href="/orders" style="float:right;">
         <b>ЗАКАЗЫ &cudarrr;</b>
     </a>
     <a href="/cart/items" style="float:right;">
         <b>КОРЗИНА &cudarrr;</b>
     </a>
+-->
+
+<a sec:authorize="isAuthenticated()"
+   href="/orders"
+   style="float:right;">
+    <b>ЗАКАЗЫ &cudarrr;</b>
+</a>
+<a sec:authorize="isAuthenticated()"
+   href="/cart/items"
+   style="float:right;">
+    <b>КОРЗИНА &cudarrr;</b>
+</a>
+
+<div th:unless="${isAuthenticated}">
+    <a href="/login" style="float:right;">  Войти  </a>
+</div>
+
+<a sec:authorize="isAuthenticated()"
+   href="/logout"
+   style="float:right;">
+    <b>  Выйти  </b>
+</a>
+
+<div style="float: right; margin-right: 20px;">
+    👤 <span sec:authentication="name">Гость</span>
+</div>
+
+
     <table style="width:70%;margin-left:auto;margin-right:auto;">
         <tr>
             <td>

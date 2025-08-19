@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -145,6 +146,7 @@ public class ProductController {
 
 
   @GetMapping("/cart/items")
+  @PreAuthorize("isAuthenticated()")
   public Mono<String> getBasket( Model model ){
     Mono<Long> userIdMono = productService.findUserIdByBasketId( currentBasket() );
     Mono<BigDecimal> balanceMono = userIdMono.flatMap( userId->paymentService.getUserBalance(userId));
@@ -212,6 +214,7 @@ public class ProductController {
 
 
   @GetMapping("/orders")
+  @PreAuthorize("isAuthenticated()")
   public Mono<String> getOrders(Model model) {
     return productService.getOrders(currentUser())
             .flatMap(order -> {
@@ -240,6 +243,7 @@ public class ProductController {
 
 
   @PostMapping("/buy")
+  @PreAuthorize("isAuthenticated()")
   public Mono<Void> postBuy(ServerWebExchange exchange) {
 
     Mono<Long> userIdMono = productService.findUserIdByBasketId(currentBasket());
@@ -321,6 +325,7 @@ public class ProductController {
 
 
   @GetMapping("/orders/{id}")
+  @PreAuthorize("isAuthenticated()")
   public Mono<String> getOrder(
           @PathVariable("id") Long orderId,
           @RequestParam(name = "newOrder", required = false, defaultValue = "false") Boolean newOrder,
