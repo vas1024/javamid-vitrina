@@ -47,8 +47,8 @@ public class ProductController {
 
   record OrderModel(Long id, BigDecimal totalSum, List<Item> items) {}
 
-  public Long currentBasket() { return 1L; }
-  public Long currentUser() { return 1L; }
+//  public Long currentBasket() { return 1L; }
+//  public Long currentUser() { return 1L; }
 
 
   private Mono<User> getCurrentUser() {
@@ -76,7 +76,6 @@ public Mono<Long> currentBasketId() {
 
 
 
-
   private Mono<Boolean> isAuthenticated() {
     return ReactiveSecurityContextHolder.getContext()
             .map(SecurityContext::getAuthentication)
@@ -91,8 +90,6 @@ public Mono<Long> currentBasketId() {
             .map(Authentication::getName)
             .defaultIfEmpty("anonymous");
   }
-
-
 
 
 
@@ -114,8 +111,6 @@ public Mono<Long> currentBasketId() {
     Mono<Long> totalItemsMono = productService.countProducts(keyword, sort, page - 1, size);
     Flux<Product> productFlux = productService.getProducts(keyword, sort, page - 1, size);
 //    Flux<BasketItem> basketItemFlux = productService.getBasketItems(currentBasket());
-
-
 
 
 
@@ -143,10 +138,6 @@ public Mono<Long> currentBasketId() {
      Mono<Long> currentBasketId = currentUser
             .map(user -> user != null ? user.getBasketId() : null)
             .doOnNext(basketId -> System.out.println("🛒 Basket ID: " + basketId));
-
-
-
-
 
 
 
@@ -299,7 +290,6 @@ public Mono<Long> currentBasketId() {
 
 
 
-
   @GetMapping("/images/{id}")
   public Mono<ResponseEntity<byte[]>> getImage(@PathVariable Long id) {
     return productService.getImageByProductId(id)
@@ -332,18 +322,6 @@ public Mono<Long> currentBasketId() {
             .doOnError(e -> System.err.println("Error: " + e));
 
 
-  /*
-    return productService.getProductItem(id, currentBasket())
-            .doOnNext(item -> {
-              model.addAttribute("item", item);
-            })
-            .doOnError(e -> System.err.println("Error: " + e)) // Добавлено
-            .thenReturn("item.html")
-            .switchIfEmpty(Mono.defer(() -> {
-              System.out.println("Item not found for id: " + id); // Добавлено
-              return Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND));
-            }));
-  */
   }
 
 
@@ -352,10 +330,8 @@ public Mono<Long> currentBasketId() {
   @GetMapping("/cart/items")
   @PreAuthorize("isAuthenticated()")
   public Mono<String> getBasket( Model model ){
-//    Mono<Long> userIdMono = productService.findUserIdByBasketId( currentBasket() );
     Mono<Long> userIdMono = currentUserId();
     Mono<BigDecimal> balanceMono = userIdMono.flatMap( userId->paymentService.getUserBalance(userId));
-//    Flux<Item> basketItems = productService.getItemsFromBasket( currentBasket() ) ;
     Flux<Item> basketItems = currentBasketId()
             .flatMapMany(productService::getItemsFromBasket);
 
@@ -438,11 +414,11 @@ public Mono<Long> currentBasketId() {
   @GetMapping("/orders")
   @PreAuthorize("isAuthenticated()")
   public Mono<String> getOrders(Model model) {
-    return currentUserId() // ← Заменили currentUser() на currentUserId()
-            .flatMapMany(userId -> productService.getOrders(userId)) // ← Передаем ID вместо User
+    return currentUserId()
+            .flatMapMany(userId -> productService.getOrders(userId))
             .flatMap(order -> {
               return productService.getOrderItems(order.getId())
-                      .map(Item::new) // Упрощенная запись
+                      .map(Item::new)
                       .collectList()
                       .flatMap(items -> {
                         return productService.getOrderItems(order.getId())
@@ -468,47 +444,15 @@ public Mono<Long> currentBasketId() {
 
 
 
-  /*
-  @GetMapping("/orders")
-  @PreAuthorize("isAuthenticated()")
-  public Mono<String> getOrders(Model model) {
-    return productService.getOrders(currentUser())
-            .flatMap(order -> {
-              return productService.getOrderItems(order.getId())
-                      .map(orderItem -> new Item(orderItem))
-                      .collectList()
-                      .flatMap(items -> {
-                        return productService.getOrderItems(order.getId()) // Повторный запрос, но теперь для суммы
-                                .map(oi -> oi.getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
-                                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                                .map(totalSum -> new OrderModel(order.getId(), totalSum, items));
-                      });
-            })
-            .collectList()
-            .doOnNext(orderModelList -> {
-              model.addAttribute("orders", orderModelList);
-
-              orderModelList.forEach(orderModel -> {
-                System.out.println(orderModel.id());
-                orderModel.items().forEach(item ->
-                        System.out.println("- " + item.getId() + " " + item.getTitle()));
-              });
-            })
-            .thenReturn("orders.html");
-  }
-*/
-
 
 
   @PostMapping("/buy")
   @PreAuthorize("isAuthenticated()")
   public Mono<Void> postBuy(ServerWebExchange exchange) {
 
-//    Mono<Long> userIdMono = productService.findUserIdByBasketId(currentBasket());
     Mono<Long> userIdMono = currentUserId();
     Mono<BigDecimal> balanceMono = userIdMono.flatMap(userId -> paymentService.getUserBalance(userId))
             .doOnNext(balance -> System.out.println("ProductController:postBuy: balance before payment: " + balance));
-//    Flux<Item> basketItems = productService.getItemsFromBasket(currentBasket());
     Flux<Item> basketItems = currentBasketId()
             .flatMapMany(productService::getItemsFromBasket);
 
@@ -585,9 +529,6 @@ public Mono<Long> currentBasketId() {
 
 
 
-
-
-
   @GetMapping("/orders/{id}")
   @PreAuthorize("isAuthenticated()")
   public Mono<String> getOrder(
@@ -595,41 +536,57 @@ public Mono<Long> currentBasketId() {
           @RequestParam(name = "newOrder", required = false, defaultValue = "false") Boolean newOrder,
           Model model) {
 
-    return productService.getOrderItems(orderId)
-            .collectList()
-            .flatMap(orderItems -> {
-              // Параллельно преобразуем в Items и считаем сумму
-              Mono<List<Item>> itemsMono = Flux.fromIterable(orderItems)
-                      .map(orderItem -> {
-                        Item item = new Item(orderItem);
-                        item.setId(orderItem.getProductId());
-                        return item;
-                      })
-                      .collectList();
+    // Получаем ID текущего пользователя и проверяем права
+    return currentUserId()
+            .flatMap(currentUserId ->
+                    productService.findOrderById(orderId)
+                            .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found")))
+                            .flatMap(order -> {
+                              if (currentUserId.longValue() != order.getUserId().longValue()) {
+                                return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied"));
+                              }
 
-              Mono<BigDecimal> totalMono = Mono.just(
-                      orderItems.stream()
-                              .map(oi -> oi.getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
-                              .reduce(BigDecimal.ZERO, BigDecimal::add)
-              );
+                              // Если проверка прошла, продолжаем оригинальную логику
+                              return productService.getOrderItems(orderId)
+                                      .collectList()
+                                      .flatMap(orderItems -> {
+                                        Mono<List<Item>> itemsMono = Flux.fromIterable(orderItems)
+                                                .map(orderItem -> {
+                                                  Item item = new Item(orderItem);
+                                                  item.setId(orderItem.getProductId());
+                                                  return item;
+                                                })
+                                                .collectList();
 
-              return Mono.zip(itemsMono, totalMono);
-            })
-            .map(tuple -> {
-              List<Item> items = tuple.getT1();
-              BigDecimal totalSum = tuple.getT2();
+                                        Mono<BigDecimal> totalMono = Mono.just(
+                                                orderItems.stream()
+                                                        .map(oi -> oi.getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
+                                                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+                                        );
 
-              record OrderModel(Long id, BigDecimal totalSum, List<Item> items) {}
-              return new OrderModel(orderId, totalSum, items);
-            })
-            .doOnNext(orderModel -> {
-              model.addAttribute("order", orderModel);
-              if (newOrder) {
-                model.addAttribute("newOrder", true);
-              }
-            })
-            .thenReturn("order.html");
+                                        return Mono.zip(itemsMono, totalMono);
+                                      })
+                                      .map(tuple -> {
+                                        List<Item> items = tuple.getT1();
+                                        BigDecimal totalSum = tuple.getT2();
+
+                                        record OrderModel(Long id, BigDecimal totalSum, List<Item> items) {}
+                                        return new OrderModel(orderId, totalSum, items);
+                                      })
+                                      .doOnNext(orderModel -> {
+                                        model.addAttribute("order", orderModel);
+                                        if (newOrder) {
+                                          model.addAttribute("newOrder", true);
+                                        }
+                                      })
+                                      .thenReturn("order.html");
+                            })
+            );
   }
+
+
+
+
 
 
 

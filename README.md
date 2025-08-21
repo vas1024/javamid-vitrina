@@ -8,9 +8,9 @@ order_items            orders                 users              baskets        
 | id         |         | id            |      | id        |      | id             |      | id          |      | id          |
 | user_id    |    1<-N | user_id       | 1<-N | name      | 1->1 | user_id        | 1->N | basket_id   | 1->N | image       |
 | name       |         | order_item_id |      | basket_id | 1<-1 | basket_item_id | 1<-N | product_id  |      | name        |
-| image      |         |               |      |           |      |                |      | quantity    |      | description |
-| price      |         +---------------+      +-----------+      +----------------+      +-------------+      | price       |
-| user_id    |                                                                                                |             |
+| image      |         |               |      | login     |      |                |      | quantity    |      | description |
+| price      |         +---------------+      | password  |      +----------------+      +-------------+      | price       |
+| user_id    |                                +-----------+                                                                |             |
 | quantity   |                                                                                                +-------------+
 | product_id |                                                                                             
 +------------+                                                                                             
@@ -33,6 +33,41 @@ balance                           payments
 
 
 
+запуск приложения
+для работы приложения необходимо, чтобы были запущены локально, в докере или где-либо в сети 
+(в этом случае потребутся настройки в application.properties) следующие приложения
+- redis
+- keycloak
+
+тестировалось всё на докер контейнерах
+docker run --name redis-test -it --rm -p 6379:6379 redis:7.4.2-bookworm sh -c "redis-server --daemonize yes && redis-cli"
+docker run -d -p 8082:8080 --name keycloak -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:26.1.3 start-dev
+
+раслределение портов:
+8080 - приложение Витрина
+8081 - рест сервис платежей
+8082 - keycloak
+6379 - db redis
+
+
+тестовые пользователи:
+в основном приложении: 
+создаются тестовые пользователи в классе DataInitializer (можно там еще добавить)
+пользователи создаются вместе с корзиной.
+у пользователя admin роль ROLE_ADMIN, у всех остальных ROLE_USER .
+это закардкожено в классе User в методе getAuthorities()
+в рестсервисе: 
+в schema.sql при первом старте создаются десять счетов для user_id 1..10 с 100000 на балансе
+
+
+
+защита - security
+в классе SecurityConfig защищены эндпоинты
+в кажом методе контроллера, который должен обслуживать только аутентифицированных пользователей,
+стоит аннотация @PreAuthorize("isAuthenticated()")
+в методе @GetMapping("/orders/{id}") добавлена аннотация 
+чтобы пользователи не могли видеть заказы друг друга.
+
 
 проект был разделен на 2 подпроекта
 rest-service
@@ -44,9 +79,7 @@ vitrina-main
 для того, чтобы избежать проблем с повторной оплатой заказа в случае сбоев, я придумал писать некий хеш заказа - order_signature
 но так и не реализовал.
 
-при старте сервиса создается тестовый пользователь с балансом 100000
-
-при выполнении данного спринта была создана спека openApi
+для создания сервиса была создана спека openApi
 лежит в ресурсах подпроекта с сервисом.
 по ней был сгенерирован код для серверной части ( рест сервис )
 важно, нельзя запускать генератор как maven goal, он тогда не читает конфигурацию из пом,
@@ -70,15 +103,15 @@ org/openapitools/client/
     ├── PaymentRequest.java        ← Модель запроса платежа  
     └── PaymentResponse.java       ← Модель ответа платежа
 
-
-
+в итоге у rest service получились следующие endpoints
+http://localhost:8081/payment/balance/{id}
+http://localhost:8081/payment
 
 
 
 
 подпроект vitrina-main
 
-в этом спринте было добавлено кеширование в Redis.
 редис запускается на локальном хосте в докер контейнере с удобным доступом в cli:
 docker run --name redis-test -it --rm -p 6379:6379 redis:7.4.2-bookworm sh -c "redis-server --daemonize yes && redis-cli"
 
@@ -91,7 +124,8 @@ docker run --name redis-test -it --rm -p 6379:6379 redis:7.4.2-bookworm sh -c "r
 
 
 
-для загрузки товаров в базу написана админка, которую надо вызвать по адресу 8080:/admin/upload
+для загрузки товаров в базу написана админка, 
+которую надо вызвать по адресу 8080:/admin/upload
 ей надо скормить zip архив содержащий файлы с картинками и csv файл с записями. возможно отсутствие картинок.
 формат файла вот такой:
 name, image, description, price
@@ -102,10 +136,6 @@ name, image, description, price
 пример для загрузки товаров лежит в папке src/main/resources/static/example
 
 при разработке использовал БД H2 в файле, в папке проекта
-
-при создании структуры БД sql скриптами в schema.sql создается один пользователь и его корзина.
-скрипты идемпотентны.
-планировал возможность многих пользователей.
 
 использовал готовые шаблоны Thymeleaf
 

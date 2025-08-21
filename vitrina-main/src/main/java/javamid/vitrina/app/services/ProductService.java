@@ -365,6 +365,7 @@ public class ProductService {
             .then();
   }
 
+  public Mono<Order> findOrderById(Long orderId) { return orderRepository.findById( orderId ); }
 
   public Flux<Order> getOrders(Long userId ){
     return orderRepository.findAllByUserId( userId );

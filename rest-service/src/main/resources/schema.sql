@@ -15,8 +15,13 @@ CREATE TABLE IF NOT EXISTS balance (
 
 
 -- create one user and basket
-MERGE INTO balance (id, user_id, amount)
-KEY (id)
-VALUES (1, 1, 100000.00);
-
-
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (1, 1, 100000.00);
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (2, 2, 100000.00);
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (3, 3, 100000.00);
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (4, 4, 100000.00);
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (5, 5, 100000.00);
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (6, 6, 100000.00);
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (7, 7, 100000.00);
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (8, 8, 100000.00);
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (9, 9, 100000.00);
+MERGE INTO balance (id, user_id, amount) KEY (id)  VALUES (10, 10, 100000.00);

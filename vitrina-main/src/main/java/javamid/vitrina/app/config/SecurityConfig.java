@@ -63,6 +63,7 @@ public class SecurityConfig {
                     .pathMatchers("/items/**").permitAll()
                     .pathMatchers("/images/**").permitAll()
                     .pathMatchers("/orderimages/**").authenticated()
+                            .pathMatchers("/buy/**").authenticated()
 //                    .anyExchange().authenticated()
             )
 
