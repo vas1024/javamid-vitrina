@@ -30,13 +30,13 @@
 </a>
 
 <div th:unless="${isAuthenticated}">
-    <a href="/login" style="float:right;">  Войти  </a>
+    <a href="/login" style="float:right;"><b>   ВОЙТИ &cudarrr;</b>  </a>
 </div>
 
 <a sec:authorize="isAuthenticated()"
    href="/logout"
    style="float:right;">
-    <b>  Выйти  </b>
+    <b>  ВЫЙТИ &cudarrr; </b>
 </a>
 
 <div style="float: right; margin-right: 20px;">
@@ -107,14 +107,29 @@
 
                     <tr>
                         <td>
+
+                            <form th:action="${'/main/items/'+item.getId()}" method="post"
+                                  sec:authorize="isAuthenticated()">
+                                <button name="action" value="minus">-</button>
+                                <span th:text="${item.getCount()}"></span>
+                                <button name="action" value="plus">+</button>
+                                <button name="action" value="plus"
+                                        th:if="${item.getCount()==0}"
+                                        style="float:right;">В корзину</button>
+                            </form>
+
+                            <!--
                             <form th:action="${'/main/items/'+item.getId()}" method="post">
                                 <button name="action" value="minus">-</button>
                                 <span th:text="${item.getCount()}"></span>
                                 <button name="action" value="plus">+</button>
                                 <button name="action" value="plus" th:if="${item.getCount()==0}" style="float:right;">В корзину</button>
                             </form>
+                            -->
                         </td>
                     </tr>
+
+
 
 <!--
                     <form th:action="@{'/main/items/' + ${item.id}}"

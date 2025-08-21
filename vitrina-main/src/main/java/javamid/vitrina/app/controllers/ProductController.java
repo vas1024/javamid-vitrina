@@ -2,6 +2,7 @@ package javamid.vitrina.app.controllers;
 
 
 import javamid.vitrina.app.dao.BasketItem;
+import javamid.vitrina.app.dao.User;
 import javamid.vitrina.app.model.Item;
 import javamid.vitrina.app.model.Paging;
 import javamid.vitrina.app.dao.Product;
@@ -12,6 +13,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -40,9 +44,57 @@ public class ProductController {
     this.paymentService = paymentService;
   }
 
+
+  record OrderModel(Long id, BigDecimal totalSum, List<Item> items) {}
+
   public Long currentBasket() { return 1L; }
   public Long currentUser() { return 1L; }
-  record OrderModel(Long id, BigDecimal totalSum, List<Item> items) {}
+
+
+  private Mono<User> getCurrentUser() {
+    return ReactiveSecurityContextHolder.getContext()
+            .map(SecurityContext::getAuthentication)
+            .map(Authentication::getName) // получаем username
+            .flatMap(username -> productService.findByLogin(username))
+//            .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED)));
+            .defaultIfEmpty( new User() );
+  }
+
+//  public Mono<Long> currentUserId() { return getCurrentUser().map(User::getId); }
+//  public Mono<Long> currentBasketId() { return getCurrentUser().map(User::getBasketId);  }
+public Mono<Long> currentUserId() {
+  return getCurrentUser()
+          .map(user -> user.getId() != null ? user.getId() : -1L)
+          .defaultIfEmpty(-1L);
+}
+public Mono<Long> currentBasketId() {
+  return getCurrentUser()
+          .map(user -> user.getBasketId() != null ? user.getBasketId() : -1L)
+          .defaultIfEmpty(-1L);
+}
+
+
+
+
+
+  private Mono<Boolean> isAuthenticated() {
+    return ReactiveSecurityContextHolder.getContext()
+            .map(SecurityContext::getAuthentication)
+            .map(Authentication::isAuthenticated)
+            .defaultIfEmpty(false);
+  }
+
+
+    private Mono<String> getCurrentUsername() {
+    return ReactiveSecurityContextHolder.getContext()
+            .map(SecurityContext::getAuthentication)
+            .map(Authentication::getName)
+            .defaultIfEmpty("anonymous");
+  }
+
+
+
+
 
   @GetMapping("/")
   public Mono<String> homePage() {
@@ -61,7 +113,147 @@ public class ProductController {
 
     Mono<Long> totalItemsMono = productService.countProducts(keyword, sort, page - 1, size);
     Flux<Product> productFlux = productService.getProducts(keyword, sort, page - 1, size);
-    Flux<BasketItem> basketItemFlux = productService.getBasketItems(currentBasket());
+//    Flux<BasketItem> basketItemFlux = productService.getBasketItems(currentBasket());
+
+
+
+
+
+
+    // 1. Текущий пользователь (или null для гостей)
+     Mono<User> currentUser = ReactiveSecurityContextHolder.getContext()
+            .map(SecurityContext::getAuthentication)
+            .map(Authentication::getName)
+            .flatMap(productService::findByLogin)
+            .defaultIfEmpty(new User())
+            .doOnNext(user -> {
+              if (user != null) {
+                System.out.println("👤 Current user: " + user.getLogin() + ", ID: " + user.getId());
+              } else {
+                System.out.println("👤 Guest user");
+              }
+            });
+
+// 2. ID пользователя (или null для гостей)
+     Mono<Long> currentUserId = currentUser
+            .map(user -> user != null ? user.getId() : null)
+            .doOnNext(userId -> System.out.println("🆔 User ID: " + userId));
+
+// 3. ID корзины (или null для гостей)
+     Mono<Long> currentBasketId = currentUser
+            .map(user -> user != null ? user.getBasketId() : null)
+            .doOnNext(basketId -> System.out.println("🛒 Basket ID: " + basketId));
+
+
+
+
+
+
+
+
+
+    Mono<Boolean> isAuthenticated = ReactiveSecurityContextHolder.getContext()
+            .map(SecurityContext::getAuthentication)
+            .doOnNext(auth -> System.out.println("🔐 Authentication object: " + auth))
+            .map(Authentication::isAuthenticated)
+            .doOnNext(authStatus -> System.out.println("✅ Authenticated status: " + authStatus))
+            .defaultIfEmpty(false)
+            .doOnNext(finalAuthStatus -> System.out.println("🎯 Final auth status: " + finalAuthStatus));
+
+    Flux<BasketItem> basketItemFlux = isAuthenticated
+            .doOnNext(authStatus -> System.out.println("🔄 Starting basket processing, authenticated: " + authStatus))
+            .flatMapMany(authenticated -> {
+              if (authenticated) {
+                System.out.println("👤 User is authenticated, getting basket...");
+                return currentBasketId()
+                        .doOnNext(basketId -> System.out.println("🛒 Basket ID: " + basketId))
+                        .flatMapMany(basketId -> {
+                          System.out.println("📦 Fetching basket items for basket: " + basketId);
+                          return productService.getBasketItems(basketId)
+                                  .doOnNext(item -> System.out.println("📋 Basket item: " + item.getProductId() + " x" + item.getQuantity()))
+                                  .doOnComplete(() -> System.out.println("✅ Basket items loading completed"))
+                                  .doOnError(e -> System.out.println("❌ Error loading basket items: " + e.getMessage()));
+                        });
+              } else {
+                System.out.println("👤 User is NOT authenticated, returning empty basket");
+                return Flux.empty(); // Пустой Flux для гостей
+              }
+            })
+            .doOnNext(item -> System.out.println("🎁 Processing basket item: " + item.getProductId()))
+            .doOnComplete(() -> System.out.println("✅ All basket items processed"))
+            .doOnError(e -> System.out.println("❌ Error in basket flow: " + e.getMessage()));
+
+    Mono<Map<Long, Integer>> basketItemsMapMono = basketItemFlux
+            .doOnNext(item -> System.out.println("🗺️ Collecting to map: " + item.getProductId() + " → " + item.getQuantity()))
+            .collectMap(BasketItem::getProductId, BasketItem::getQuantity)
+            .doOnNext(map -> System.out.println("🗺️ Final items map: " + map))
+            .defaultIfEmpty(Map.of())
+            .doOnNext(finalMap -> System.out.println("🎯 Final map (after default): " + finalMap))
+            .doOnError(e -> System.out.println("❌ Error creating map: " + e.getMessage()));
+
+    Mono<List<Item>> itemsMono = basketItemsMapMono
+            .doOnNext(map -> System.out.println("🛍️ Starting items processing with map: " + map))
+            .flatMap(basketItemsMap -> {
+              System.out.println("🛒 Processing products with basket map");
+              return productFlux
+                      .doOnNext(product -> System.out.println("📦 Processing product: " + product.getId()))
+                      .map(product -> {
+                        Item item = new Item(product);
+                        Integer count = basketItemsMap.get(product.getId());
+                        item.setCount(count != null ? count : 0);
+                        System.out.println("🎯 Product " + product.getId() + " → count: " + item.getCount());
+                        return item;
+                      })
+                      .collectList()
+                      .doOnNext(itemsList -> System.out.println("✅ Final items list: " + itemsList.size() + " items"));
+            })
+            .defaultIfEmpty(List.of())
+            .doOnNext(finalList -> System.out.println("🎯 Final list (after default): " + finalList.size() + " items"))
+            .doOnError(e -> System.out.println("❌ Error in items processing: " + e.getMessage()));
+
+
+
+
+
+/*
+    Mono<Boolean> isAuthenticated = ReactiveSecurityContextHolder.getContext()
+            .map(SecurityContext::getAuthentication)
+            .map(Authentication::isAuthenticated)
+            .defaultIfEmpty(false);
+
+
+    Flux<BasketItem> basketItemFlux = isAuthenticated
+            .flatMapMany(authenticated -> {
+              if (authenticated) {
+                return currentBasketId()
+                        .flatMapMany(productService::getBasketItems);
+              } else {
+                return Flux.empty(); // Пустой Flux для гостей
+              }
+            });
+
+    Mono<Map<Long, Integer>> basketItemsMapMono = basketItemFlux
+            .collectMap(BasketItem::getProductId, BasketItem::getQuantity)
+            .defaultIfEmpty(Map.of()); // Пустая map для гостей
+
+    Mono<List<Item>> itemsMono = basketItemsMapMono.flatMap(basketItemsMap ->
+            productFlux
+                    .map(product -> {
+                      Item item = new Item(product);
+                      item.setCount(basketItemsMap.getOrDefault(product.getId(), 0));
+                      return item;
+                    })
+                    .collectList()
+    ).defaultIfEmpty(List.of()); // Пустой список для гостей
+*/
+
+
+
+
+
+/*
+    Flux<BasketItem> basketItemFlux = currentBasketId()
+            .flatMapMany(productService::getBasketItems);
 
     Mono<Map<Long, Integer>> basketItemsMapMono = basketItemFlux
             .collectMap(BasketItem::getProductId, BasketItem::getQuantity);
@@ -75,6 +267,9 @@ public class ProductController {
                     })
                     .collectList()
     );
+*/
+
+
 
     return Mono.zip(itemsMono, totalItemsMono)
             .doOnNext(tuple -> {
@@ -127,11 +322,20 @@ public class ProductController {
   @GetMapping("/items/{id}")
   public Mono<String> getItem(@PathVariable(name="id") long id,
                         Model model ) {
-//    Mono<Item> itemMono = productService.getProductItem(id, currentBasket())
+
+
+    return currentBasketId()
+            .flatMap(basketId -> productService.getProductItem(id, basketId))
+            .doOnNext(item -> model.addAttribute("item", item))
+            .thenReturn("item.html")
+            .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND)))
+            .doOnError(e -> System.err.println("Error: " + e));
+
+
+  /*
     return productService.getProductItem(id, currentBasket())
             .doOnNext(item -> {
               model.addAttribute("item", item);
-//              System.out.println("Item = " + item.getDescription());
             })
             .doOnError(e -> System.err.println("Error: " + e)) // Добавлено
             .thenReturn("item.html")
@@ -139,7 +343,7 @@ public class ProductController {
               System.out.println("Item not found for id: " + id); // Добавлено
               return Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND));
             }));
-
+  */
   }
 
 
@@ -148,9 +352,13 @@ public class ProductController {
   @GetMapping("/cart/items")
   @PreAuthorize("isAuthenticated()")
   public Mono<String> getBasket( Model model ){
-    Mono<Long> userIdMono = productService.findUserIdByBasketId( currentBasket() );
+//    Mono<Long> userIdMono = productService.findUserIdByBasketId( currentBasket() );
+    Mono<Long> userIdMono = currentUserId();
     Mono<BigDecimal> balanceMono = userIdMono.flatMap( userId->paymentService.getUserBalance(userId));
-    Flux<Item> basketItems = productService.getItemsFromBasket( currentBasket() ) ;
+//    Flux<Item> basketItems = productService.getItemsFromBasket( currentBasket() ) ;
+    Flux<Item> basketItems = currentBasketId()
+            .flatMapMany(productService::getItemsFromBasket);
+
 
     return basketItems
             .collectList()
@@ -175,6 +383,9 @@ public class ProductController {
   }
 
 
+
+
+
 // три раза одинаковый код. костыль потому что не получается  @RequestParam(name="action")
   @PostMapping(value = "/items/{id}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE )
   public Mono<String> addRemoveDeleteProductInProductItem( @PathVariable(name="id") long id,
@@ -182,8 +393,11 @@ public class ProductController {
     return exchange.getFormData()
             .flatMap(formData -> {
               String action = formData.getFirst("action");
-              return productService.plusMinusDelete(id, currentBasket(), action)
-                      .thenReturn("redirect:/items/" + id );
+              return currentBasketId()
+                      .flatMap(currentBasket ->
+                              productService.plusMinusDelete(id, currentBasket, action)
+                      )
+                      .thenReturn("redirect:/items/" + id);
             });
   }
   @PostMapping(value = "/cart/items/{id}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE )
@@ -192,7 +406,10 @@ public class ProductController {
     return exchange.getFormData()
             .flatMap(formData -> {
               String action = formData.getFirst("action");
-              return productService.plusMinusDelete(id, currentBasket(), action)
+              return currentBasketId()
+                      .flatMap( currentBasket ->
+                            productService.plusMinusDelete(id, currentBasket, action)
+                      )
                       .thenReturn("redirect:/cart/items");
             });
   }
@@ -205,7 +422,10 @@ public class ProductController {
     return exchange.getFormData()
             .flatMap(formData -> {
               String action = formData.getFirst("action");
-              return productService.plusMinusDelete(id, currentBasket(), action)
+              return currentBasketId()
+                      .flatMap( currentBasket ->
+                             productService.plusMinusDelete(id, currentBasket, action)
+                      )
                       .thenReturn("redirect:/main/items");
             });
   }
@@ -213,6 +433,42 @@ public class ProductController {
 
 
 
+
+
+  @GetMapping("/orders")
+  @PreAuthorize("isAuthenticated()")
+  public Mono<String> getOrders(Model model) {
+    return currentUserId() // ← Заменили currentUser() на currentUserId()
+            .flatMapMany(userId -> productService.getOrders(userId)) // ← Передаем ID вместо User
+            .flatMap(order -> {
+              return productService.getOrderItems(order.getId())
+                      .map(Item::new) // Упрощенная запись
+                      .collectList()
+                      .flatMap(items -> {
+                        return productService.getOrderItems(order.getId())
+                                .map(oi -> oi.getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
+                                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                                .map(totalSum -> new OrderModel(order.getId(), totalSum, items));
+                      });
+            })
+            .collectList()
+            .doOnNext(orderModelList -> {
+              model.addAttribute("orders", orderModelList);
+              orderModelList.forEach(orderModel -> {
+                System.out.println(orderModel.id());
+                orderModel.items().forEach(item ->
+                        System.out.println("- " + item.getId() + " " + item.getTitle()));
+              });
+            })
+            .thenReturn("orders.html");
+  }
+
+
+
+
+
+
+  /*
   @GetMapping("/orders")
   @PreAuthorize("isAuthenticated()")
   public Mono<String> getOrders(Model model) {
@@ -240,16 +496,21 @@ public class ProductController {
             })
             .thenReturn("orders.html");
   }
+*/
+
 
 
   @PostMapping("/buy")
   @PreAuthorize("isAuthenticated()")
   public Mono<Void> postBuy(ServerWebExchange exchange) {
 
-    Mono<Long> userIdMono = productService.findUserIdByBasketId(currentBasket());
+//    Mono<Long> userIdMono = productService.findUserIdByBasketId(currentBasket());
+    Mono<Long> userIdMono = currentUserId();
     Mono<BigDecimal> balanceMono = userIdMono.flatMap(userId -> paymentService.getUserBalance(userId))
             .doOnNext(balance -> System.out.println("ProductController:postBuy: balance before payment: " + balance));
-    Flux<Item> basketItems = productService.getItemsFromBasket(currentBasket());
+//    Flux<Item> basketItems = productService.getItemsFromBasket(currentBasket());
+    Flux<Item> basketItems = currentBasketId()
+            .flatMapMany(productService::getItemsFromBasket);
 
     Mono<BigDecimal> totalMono = basketItems
             .collectList()  // собираем Flux в Mono<List<Item>>
@@ -258,7 +519,9 @@ public class ProductController {
                     .reduce(BigDecimal.ZERO, BigDecimal::add)
             );
 
-    Mono<String> orderSignatureMono = productService.getBasketSignature(currentBasket());
+//    Mono<String> orderSignatureMono = productService.getBasketSignature(currentBasket());
+    Mono<String> orderSignatureMono = currentBasketId()
+            .flatMap( productService::getBasketSignature);
 
 
 
@@ -297,13 +560,14 @@ public class ProductController {
                       })
                       .flatMap(paymentSuccess -> {
                                 if (paymentSuccess) {
-                                  return productService.makeOrder(currentBasket())
+                                  return currentBasketId()
+                                          .flatMap(productService::makeOrder) // makeOrder принимает Long
                                           .flatMap(orderId -> {
                                             exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
                                             exchange.getResponse().getHeaders().setLocation(
                                                     URI.create("/orders/" + orderId)
                                             );
-                                            return Mono.empty();
+                                            return exchange.getResponse().setComplete();
                                           });
                                 }
                                 return Mono.empty();
@@ -370,5 +634,9 @@ public class ProductController {
 
 
 
+  @GetMapping("/check")
+  public Mono<String> getCheck ( Model model ){
+    return Mono.just("message.html");
+  }
 
 }

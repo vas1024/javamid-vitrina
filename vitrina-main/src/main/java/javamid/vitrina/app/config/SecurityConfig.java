@@ -2,18 +2,24 @@ package javamid.vitrina.app.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.WebFilterExchange;
 import org.springframework.security.web.server.csrf.CsrfWebFilter;
 import org.springframework.security.web.server.util.matcher.AndServerWebExchangeMatcher;
 import org.springframework.security.web.server.util.matcher.NegatedServerWebExchangeMatcher;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+
+import java.net.URI;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
@@ -54,20 +60,37 @@ public class SecurityConfig {
                     .pathMatchers("/logout").permitAll()
                     .pathMatchers("/").permitAll()
                     .pathMatchers("/main/items/**").permitAll()
-                    .anyExchange().authenticated()
+                    .pathMatchers("/items/**").permitAll()
+                    .pathMatchers("/images/**").permitAll()
+                    .pathMatchers("/orderimages/**").authenticated()
+//                    .anyExchange().authenticated()
             )
 
+
 //            .formLogin(withDefaults())
+
+            .formLogin(form -> form
+                    .authenticationSuccessHandler((exchange, authentication) -> {
+                      System.out.println("✅ Вход: " + authentication.getName() +
+                              " | Роли: " + authentication.getAuthorities());
+                      exchange.getExchange().getResponse()
+                              .setStatusCode(HttpStatus.SEE_OTHER);
+                      exchange.getExchange().getResponse()
+                              .getHeaders().setLocation(URI.create("/"));
+                      return Mono.empty();
+                    })
+            )
+
+            .logout(logout -> logout
+                    .logoutUrl("/logout")
+                    //  красивый костыль, по сути замена лямбды.
+                    //  и всё потому, чт в реактивном вебфлюксе нет .logoutSuccessUrl(
+                    .logoutSuccessHandler(this::handleLogout)
+            )
+
             .csrf(ServerHttpSecurity.CsrfSpec::disable) // Для тестов, в продакшене включить
 
 
-            .formLogin(form -> form
-                    .authenticationFailureHandler((exchange, e) -> {
-                      // Реактивное чтение формы
-                      System.out.println("Ошибка при логине: " + e.getMessage());
-                      return Mono.error(e);
-                    })
-            )
 
 
             .build();
@@ -79,6 +102,13 @@ public class SecurityConfig {
     return new BCryptPasswordEncoder();
     // Или другой алгоритм:
     // return new Argon2PasswordEncoder();
+  }
+
+  private Mono<Void> handleLogout(WebFilterExchange exchange, Authentication auth) {
+    ServerWebExchange serverExchange = exchange.getExchange();
+    serverExchange.getResponse().setStatusCode(HttpStatus.FOUND);
+    serverExchange.getResponse().getHeaders().setLocation(URI.create("/"));
+    return serverExchange.getResponse().setComplete();
   }
 
 }

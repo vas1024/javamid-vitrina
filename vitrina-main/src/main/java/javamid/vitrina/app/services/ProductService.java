@@ -95,6 +95,9 @@ public class ProductService {
     return userRepository.findById( id );
   }
 
+  public Mono<User> findByLogin( String login ) {
+    return userRepository.findByLogin( login );
+  }
 
 
 
