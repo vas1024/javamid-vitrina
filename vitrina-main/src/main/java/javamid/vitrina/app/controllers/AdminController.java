@@ -5,10 +5,12 @@ import javamid.vitrina.app.dao.Product;
 import javamid.vitrina.app.services.ProductService;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.util.FileSystemUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
@@ -33,12 +35,15 @@ public class AdminController {
     this.productService = productService;
   }
 
+
+
   @GetMapping("/admin/upload")
   public Mono<String> showForm(Model model) {
     model.addAttribute("message", "Выберите файл и нажмите 'Распарсить'");
     model.addAttribute("enableUpload", false);
     return Mono.just("admin_upload.html");
   }
+
 
   @PostMapping(value = "/admin/upload/parse", consumes = "multipart/form-data")
   public Mono<String> parseFile(@RequestPart("file") FilePart zipFile, Model model) {

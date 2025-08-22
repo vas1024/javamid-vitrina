@@ -25,10 +25,12 @@
 
 <div class="message" th:text="${message}">Сообщение будет здесь</div>
 
+
 <form method="post" action="/admin/upload/parse" enctype="multipart/form-data">
-    <input type="file" name="file"  accept=".zip,application/zip">
+    <input type="file" name="file" accept=".zip" required>
     <button type="submit">Распарсить</button>
 </form>
+
 
 <form method="post" action="/admin/upload/upload">
     <input type="hidden" name="fileName" th:value="${fileName}">
@@ -37,5 +39,8 @@
             th:text="'Загрузить в БД' + (${enableUpload} ? '' : ' (неактивно)')">
     </button>
 </form>
+
+
+
 </body>
 </html>

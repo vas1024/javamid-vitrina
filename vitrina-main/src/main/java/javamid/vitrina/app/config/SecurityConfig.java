@@ -1,6 +1,11 @@
 package javamid.vitrina.app.config;
 
 import org.springframework.context.annotation.Bean;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
+import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher;
+import reactor.core.publisher.Mono;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
@@ -12,14 +17,14 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.WebFilterExchange;
+import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
 import org.springframework.security.web.server.csrf.CsrfWebFilter;
-import org.springframework.security.web.server.util.matcher.AndServerWebExchangeMatcher;
-import org.springframework.security.web.server.util.matcher.NegatedServerWebExchangeMatcher;
-import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
+import org.springframework.security.web.server.util.matcher.*;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
+import java.util.Optional;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
@@ -49,7 +54,22 @@ public class SecurityConfig {
                             )
                     )
             )
- */
+*/
+/*
+            .csrf(csrf -> csrf
+                    .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
+                    .accessDeniedHandler((exchange, ex) -> {
+                      System.out.println("CSRF DENIED! Reason: " + ex.getMessage());
+                      System.out.println("Request URI: " + exchange.getRequest().getURI());
+                      return Mono.error(ex);
+                    })
+            )
+*/
+/*
+            .csrf(csrf -> csrf
+                    .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
+            )
+*/
 
             .authorizeExchange(exchanges -> exchanges
                     .pathMatchers("/cart/**").authenticated()
@@ -63,7 +83,7 @@ public class SecurityConfig {
                     .pathMatchers("/items/**").permitAll()
                     .pathMatchers("/images/**").permitAll()
                     .pathMatchers("/orderimages/**").authenticated()
-                            .pathMatchers("/buy/**").authenticated()
+                    .pathMatchers("/buy/**").authenticated()
 //                    .anyExchange().authenticated()
             )
 
@@ -90,8 +110,6 @@ public class SecurityConfig {
             )
 
             .csrf(ServerHttpSecurity.CsrfSpec::disable) // Для тестов, в продакшене включить
-
-
 
 
             .build();
