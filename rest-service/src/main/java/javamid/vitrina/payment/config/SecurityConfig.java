@@ -1,42 +1,76 @@
 package javamid.vitrina.payment.config;
 
+
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
-import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
-import org.springframework.security.web.server.WebFilterExchange;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
+import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import reactor.core.publisher.Flux;
 
-import java.net.URI;
-
-import static org.springframework.security.config.Customizer.withDefaults;
-
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Configuration
-@EnableWebFluxSecurity
-//@EnableReactiveMethodSecurity
 public class SecurityConfig {
 
   @Bean
-  public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+  public SecurityWebFilterChain securityFilterChain(ServerHttpSecurity http) {
     return http
             .authorizeExchange(exchanges -> exchanges
-                    .pathMatchers("/**").permitAll()
+                    .pathMatchers("/api/public/**", "/actuator/**", "/v3/api-docs").permitAll()
+                    .anyExchange().authenticated()
             )
-            .formLogin(withDefaults())
-            .logout(withDefaults())
-            .csrf(ServerHttpSecurity.CsrfSpec::disable) // Для тестов, в продакшене включить
+            .oauth2ResourceServer(ServerHttpSecurity.OAuth2ResourceServerSpec::jwt)
+            .csrf(ServerHttpSecurity.CsrfSpec::disable)
+            .build();
+  }
+}
+
+/*
+@Configuration
+public class SecurityConfig {
+
+  @Bean
+  public SecurityWebFilterChain securityFilterChain(ServerHttpSecurity http) {
+    return http
+            .authorizeExchange(exchanges -> exchanges
+                    .anyExchange().authenticated()
+            )
+            .oauth2ResourceServer(oauth2 -> oauth2
+                    .jwt(jwt -> jwt
+                            .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                    )
+            )
+            .csrf(ServerHttpSecurity.CsrfSpec::disable)
             .build();
   }
 
+  @Bean
+  public ReactiveJwtAuthenticationConverter jwtAuthenticationConverter() {
+    ReactiveJwtAuthenticationConverter converter = new ReactiveJwtAuthenticationConverter();
 
+    converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+      List<String> roles = jwt.getClaimAsStringList("roles");
 
+      if (roles == null || roles.isEmpty()) {
+        return Flux.empty(); // Возвращаем Flux.empty() вместо Mono.just(List.of())
+      }
+
+      // Конвертируем роли в authorities и возвращаем как Flux
+      List<GrantedAuthority> authorities = roles.stream()
+              .map(role -> "ROLE_" + role)
+              .map(SimpleGrantedAuthority::new)
+              .collect(Collectors.toList());
+
+      return Flux.fromIterable(authorities); // Возвращаем Flux из коллекции
+    });
+
+    return converter;
+  }
 }
+*/

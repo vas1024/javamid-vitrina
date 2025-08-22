@@ -112,7 +112,7 @@ org/openapitools/client/
 в итоге у rest service получились следующие endpoints
 http://localhost:8081/payment/balance/{id}
 http://localhost:8081/payment
-
+http://localhost:8081/v3/api-docs
 
 
 

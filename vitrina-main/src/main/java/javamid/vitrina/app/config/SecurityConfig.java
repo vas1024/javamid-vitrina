@@ -28,6 +28,8 @@ import java.util.Optional;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
+import org.springframework.security.config.Customizer;
+
 
 @Configuration
 @EnableWebFluxSecurity
@@ -111,6 +113,7 @@ public class SecurityConfig {
 
             .csrf(ServerHttpSecurity.CsrfSpec::disable) // Для тестов, в продакшене включить
 
+            .oauth2Login(Customizer.withDefaults())
 
             .build();
   }
