@@ -113,8 +113,6 @@ public class SecurityConfig {
 
             .csrf(ServerHttpSecurity.CsrfSpec::disable) // Для тестов, в продакшене включить
 
-            .oauth2Login(Customizer.withDefaults())
-
             .build();
   }
 

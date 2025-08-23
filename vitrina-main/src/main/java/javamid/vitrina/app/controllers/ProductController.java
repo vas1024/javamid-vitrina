@@ -76,6 +76,7 @@ public Mono<Long> currentBasketId() {
 
 
 
+
   private Mono<Boolean> isAuthenticated() {
     return ReactiveSecurityContextHolder.getContext()
             .map(SecurityContext::getAuthentication)
