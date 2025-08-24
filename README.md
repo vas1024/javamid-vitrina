@@ -43,6 +43,34 @@ balance                           payments
 docker run --name redis-test -it --rm -p 6379:6379 redis:7.4.2-bookworm sh -c "redis-server --daemonize yes && redis-cli"
 docker run -d -p 8082:8080 --name keycloak -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:26.1.3 start-dev
 
+
+настройка основного приложения как клиента в keycloak:
+основное приложение vitrina-main является клиентом в keycloak, пользователей нет, ролей нет, скоуп не используется,
+только authenticated or not
+в кейклоаке в веб консоли http://127.0.0.1:8082/ ( в виндовсе тут не работает localhost )
+создать клиента:
+Client ID Vitrina
+Client authentication	On
+Standard flow
+Direct access greants
+Service accounts roles
+Credentials -> Client secret  - отсюда взять секрет
+генерацию токенов можно проверить курлом, подставив свой client_secret
+curl -X POST "http://localhost:8082/realms/master/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=vitrina&client_secret=78Zi4hnhNrcSFGwWMlvy9468SHUcoWjy&grant_type=client_credentials"
+в основном приложении в application.properties правильно прописать
+spring.security.oauth2.client.provider.keycloak.issuer-uri=http://localhost:8082/realms/master
+spring.security.oauth2.client.registration.keycloak.client-id=vitrina
+spring.security.oauth2.client.registration.keycloak.client-secret=78Zi4hnhNrcSFGwWMlvy9468SHUcoWjy
+spring.security.oauth2.client.registration.keycloak.scope=openid,profile,email
+spring.security.oauth2.client.registration.keycloak.authorization-grant-type=client_credentials
+
+рест сервис является сервером ресурсов, ему нужен коннект к кейклоаку только для получения публичных ключей для декодирования токенов,
+таким образом, для него нет настроек в кейклоаке
+в application.properties
+spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:8082/realms/master
+
+
+
 раслределение портов:
 8080 - приложение Витрина
 8081 - рест сервис платежей
@@ -53,6 +81,10 @@ docker run -d -p 8082:8080 --name keycloak -e KC_BOOTSTRAP_ADMIN_USERNAME=admin 
 тестовые пользователи:
 в основном приложении: 
 создаются тестовые пользователи в классе DataInitializer (можно там еще добавить)
+admin admin
+user1 aaa
+user2 bbb
+user3 ccc
 пользователи создаются вместе с корзиной.
 у пользователя admin роль ROLE_ADMIN, у всех остальных ROLE_USER .
 это закардкожено в классе User в методе getAuthorities()
@@ -63,11 +95,14 @@ docker run -d -p 8082:8080 --name keycloak -e KC_BOOTSTRAP_ADMIN_USERNAME=admin 
 
 защита - security
 - в классе SecurityConfig защищены эндпоинты
-- в кажом методе контроллера, который должен обслуживать только аутентифицированных пользователей,
+- в каждом методе контроллера, который должен обслуживать только аутентифицированных пользователей,
 стоит аннотация @PreAuthorize("isAuthenticated()")
 - в методе @GetMapping("/orders/{id}") добавлена проверка в код ( currentUserId() == findOrderById.userId ) 
 чтобы пользователи не могли видеть заказы друг друга.
-
+- вызов рестсервиса для проверки баланса и совершения платежа защищен
+OAuth in keycloak, PaymentService в vithina-main получает в кейклоак токен и посылает его в заголовке запроса
+рестсервис проверяет токен
+- 
 csrf - отключена во всем проекте
 никак не удалось заставить работать с POST multupart data type
 не удалось частично отключить для конкретных ендпоинтов в реактивном вебфлюксе

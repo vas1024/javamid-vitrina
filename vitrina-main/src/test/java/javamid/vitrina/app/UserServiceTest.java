@@ -1,4 +1,4 @@
-package javamid.vitrina;
+package javamid.vitrina.app;
 
 import javamid.vitrina.app.dao.User;
 import javamid.vitrina.app.services.ProductService;
@@ -9,9 +9,11 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.springframework.security.test.context.support.WithMockUser;
 
 
 @SpringBootTest
+@WithMockUser(username = "user1", roles = {"USER"})
 class UserServiceTest {
 
   @Autowired

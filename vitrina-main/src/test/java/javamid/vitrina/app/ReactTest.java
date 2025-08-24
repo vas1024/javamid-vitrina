@@ -6,6 +6,7 @@ import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWeb
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import javamid.vitrina.app.repositories.ProductRepository;
 import javamid.vitrina.app.repositories.BasketRepository;
@@ -18,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @SpringBootTest
+@WithMockUser(username = "user1", roles = {"USER"})
 @AutoConfigureWebTestClient
 public class ReactTest {
 
